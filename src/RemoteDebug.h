@@ -377,8 +377,8 @@ private:
 	boolean _filterActive = false;
 
 #ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
-    static constexpr size_t WEB_MAX_LINE_LENGTH = 1024;
-    static constexpr size_t WEB_MAX_BATCH_LENGTH = 8192;
+	static constexpr size_t WEB_MAX_LINE_LENGTH = REMOTEDEBUG_WEB_MAX_LINE_LENGTH;
+	static constexpr size_t WEB_MAX_BATCH_LENGTH = REMOTEDEBUG_WEB_MAX_BATCH_LENGTH;
     static constexpr uint32_t WEB_BATCH_INTERVAL_MS = 25;
     AsyncWebSocket* _webSocket = nullptr;
     uint8_t _webLevel = DEBUG;

@@ -16,10 +16,19 @@
 //#define DEBUG_DISABLED true
 
 // Optional AsyncWebServer WebSocket output transport. Define this before
-// including RemoteDebug.h and install ESPAsyncWebServer to enable it.
-#define REMOTEDEBUG_ENABLE_WEBSOCKET
+// Define in platformio.ini build flags to enable:
+// -D REMOTEDEBUG_ENABLE_WEBSOCKET=1
+//#define REMOTEDEBUG_ENABLE_WEBSOCKET
 
-// Debug enabled ?
+// Override these in platformio.ini build flags:
+// -D REMOTEDEBUG_WEB_MAX_LINE_LENGTH=512
+// -D REMOTEDEBUG_WEB_MAX_BATCH_LENGTH=16384
+#ifndef REMOTEDEBUG_WEB_MAX_LINE_LENGTH
+    #define REMOTEDEBUG_WEB_MAX_LINE_LENGTH 1024
+#endif
+#ifndef REMOTEDEBUG_WEB_MAX_BATCH_LENGTH
+    #define REMOTEDEBUG_WEB_MAX_BATCH_LENGTH 8192
+#endif
 
 #ifndef DEBUG_DISABLED
 
@@ -73,23 +82,6 @@
 // Note: app not have it yet
 //#define DEBUGGER_SEND_INFO true
 #endif
-
-///// Websocket server to support debug over web browser (RemoteDebugApp)
-// Uncomment this to disable it
-//#define WEBSOCKET_DISABLED true
-
-///////////// For RemoteDebugger ///////////////////
-
-// Enable Flash variables support - F()
-// Used internally in SerialDebug and in public API
-// If is a low memory board, like AVR, all strings in SerialDebug is using flash memory
-// If have RAM memory, this is more fast than flash
-//#define DEBUG_USE_FLASH_F true
-
-// For Espressif boards, default is not flash support for printf,
-// due it have a lot of memory and Serial.printf is not compatible with it
-// If you need more memory, can force it:
-//#define DEBUG_USE_FLASH_F true
 
 #endif /* DEBUG_DISABLED */
 
