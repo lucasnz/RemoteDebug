@@ -1,32 +1,3 @@
-
-/*
- * Header for RemoteDebugCfg
- *
- * MIT License
- *
- * Copyright (c) 2019 Joao Lopes
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *
- */
-
 /*
  * All configurations have moved to RemoteDebugCfg.h,
  * to facilitate changes
@@ -44,12 +15,19 @@
 ///// as nothing of RemotedDebug is compiled, zero overhead :-)
 //#define DEBUG_DISABLED true
 
+// Optional AsyncWebServer WebSocket output transport. Define this before
+// including RemoteDebug.h and install ESPAsyncWebServer to enable it.
+#define REMOTEDEBUG_ENABLE_WEBSOCKET
+
 // Debug enabled ?
 
 #ifndef DEBUG_DISABLED
 
 ///// Port for telnet server
 #define TELNET_PORT 23
+
+// Maximum accepted Telnet command length (overlong commands are discarded).
+#define REMOTEDEBUG_MAX_COMMAND_LENGTH 128
 
 // Disable auto function for debug macros? (uncomment this if not want this)
 //#define DEBUG_DISABLE_AUTO_FUNC true
@@ -85,9 +63,6 @@
 #define DELAY_TO_SEND 10 // Time to send buffer
 #define MAX_SIZE_SEND 1460 // Maximum size of packet (limit of TCP/IP)
 #endif
-
-// Enable if you test features yet in development
-//#define ALPHA_VERSION true
 
 // Debugger support enabled ?
 // Comment this to disable it

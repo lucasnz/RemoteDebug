@@ -1,639 +1,230 @@
-# RemoteDebug Library (fork)
+# RemoteDebug
 
-This is a custom fork - original library is available at <https://github.com/JoaoLopesF/RemoteDebug>!
+**An ESP32 remote debugging library with integrated Telnet and WebSocket transports.**
 
-A fork of library for Arduino to debug projects over WiFi, with web app or telnet client,
-with Print commands like Serial Monitor.
+This project is a fork of [JoaoLopesF/RemoteDebug](https://github.com/JoaoLopesF/RemoteDebug) and incorporates changes from [ktos/RemoteDebug](https://github.com/ktos/RemoteDebug). The goal of the project is to provide **one library, one logging API, and multiple transports**. The library provides Telnet and WebSocket based `RemoteDebug` support.
 
-![logo](extras/readme_media/logo.png)
+- **Fork:** https://github.com/lucasnz/RemoteDebug
+- **Upstream:** https://github.com/JoaoLopesF/RemoteDebug
+- **Incorporates** https://github.com/ktos/RemoteDebug
 
-## A library to remotely debug over a WiFi connection by telnet or web browser
+## Features
 
-### RemoteDebug setup a TCP/IP server, that you connect to debugging, as an alternative to the serial connection
+### Integrated dual-transport debugging
 
-## Contents
+This fork brings together the original RemoteDebug functionality and WebSocket-based debugging.
 
-- [About](#about)
-- [How it looks](#how-it-looks)
-- [Github](#github)
-- [News](#news)
-- [Benefits](#benefits)
-- [Telnet client](#telnet)
-- [Wishlist](#wishlist)
-- [Install](#install)
-- [Using](#usage)
-- [Known issues](#known-issues)
-- [Releases](#releases)
-- [Thanks](#thanks)
+- **Telnet debugging:** Retains the familiar remote logging workflow from the upstream library.
+- **WebSocket debugging:** Adds a WebSocket transport for delivering diagnostic output to browser-based clients.
+- **Unified logging interface:** Uses the `RemoteDebug` class and existing logging macros rather than requiring a separate `WebRemoteDebug` object.
+- **Shared library:** Keeps transport integration and debugging configuration within one library.
 
-## About
+### WebSocket-specific functionality
 
-By default the Arduino only has as debug possibility via the Serial port.
-This has a few disadvantages:
+The WebSocket integration adds controls for managing browser-based debugging output, including:
 
-- requires a physical cable to the Arduino device (if the device is far away or in a remote location this is not easy)
-- debugging multiple Arduinos at the same time requires many serial ports and a lot of cables
+- Attaching and detaching a WebSocket endpoint.
+- Configuring the WebSocket debugging level independently.
+- Enabling or disabling WebSocket output.
+- Controlling the display of debugging levels and profiler information.
+- Checking whether WebSocket clients are connected and obtaining the client count.
+- Sending messages to WebSocket clients.
+- Inspecting output batching and buffer statistics.
+- Monitoring dropped WebSocket lines and bytes.
 
-With the ESP8266 (NodeMCU) or ESP32 we now have network connectivity (WiFi) which can be used for streaming debugging information in real-time.
+The exact API is defined by the headers in the version installed. See `src/RemoteDebug.h` for the available methods.
 
-This library is good for IoT projects, home automation, mobile robots (can debug it in moviment with a cable ?) or
-another WiFi projects.
+### RemoteDebug functionality
 
-In fact, this library was born of a need to debug an IoT project of home automation.
-In this project there was a central module and three auxiliary modules,
-and these were far from each other. One was hard to reach, under the roof of the house.
-To debug this project, accompanying the exchange of messages in realtime,
-is impossible to do with traditional way, by USB cable.
+The fork retains the original library's core debugging capabilities, including:
 
-The MiP_ESP8266_Library and my ESP32 WiFi robot are example of projects that uses __RemoteDebug__.
-See it in:  [MiP_ESP8266_Library](https://github.com/Tiogaplanet/MiP_ESP8266_Library) and [ESPlorer_v1](https://github.com/JoaoLopesF/ESPlorer_v1)
+- Multiple logging levels:
+  - `PROFILER`
+  - `VERBOSE`
+  - `DEBUG`
+  - `INFO`
+  - `WARNING`
+  - `ERROR`
+  - `ANY`
+- Logging through the familiar `debugV()`, `debugD()`, `debugI()`, `debugW()`, and `debugE()` macros.
+- Remote debugging session management.
+- Optional password configuration.
+- Configurable output colours and timestamps.
+- Debug-level display.
+- Profiler support and automatic profiler-level adjustment.
+- Project-specific commands, command help, and callbacks.
+- Optional reset commands.
+- New-client and debugger callbacks.
+- Optional serial output.
 
-__RemoteDebug__ is improved with client buffering (is last send is <= 10ms),
-to avoid mysterious delays of WiFi networking on ESP32 and ESP8266 boards
+Refer to the source and examples for the precise behaviour and supported configuration options.
 
-Note: If your project not use WiFi, you can use my another library,
-the __[SerialDebug](https://github.com/JoaoLopesF/SerialDebug)__ library, 
-this library works with any Arduino board.
+## Platform and dependencies
 
-Note II: __RemoteDebug__ library is now only to Espressif boards, as ESP32 and ESP8266,
-If need for another WiFi boards, please add an issue about this
-and we will see if it is possible made the port for your board.
+This fork is intended for ESP32 projects using the Arduino framework.
 
-## How it looks
+### Requirements
 
-Image: In telnet client
+- An ESP32-compatible Arduino environment.
+- A compatible `ESPAsyncWebServer` installation for WebSocket support.
+- The asynchronous TCP dependency required by the selected web-server version.
+- A network connection for remote debugging.
 
-![remotedebug_v2](extras/readme_media/remotedebug_v2.png)
+The WebSocket transport depends on the asynchronous web-server stack. Ensure the versions of the ESP32 Arduino core, `ESPAsyncWebServer`, and its dependencies are compatible with one another.
 
-Youtube (RemoteDebug v2):
+The original upstream library supported additional environments. Do not assume ESP8266 compatibility with this fork unless it has been explicitly tested for the revision you are using.
 
-[![youtube1](https://img.youtube.com/vi/T4nxdsFUGgg/0.jpg)](https://youtu.be/T4nxdsFUGgg)
+## Installation
 
-Youtube (3 telnet connections with RemoteDebug) v1:
+### PlatformIO
 
-[![youtube2](http://img.youtube.com/vi/lOo-MAD8gPo/0.jpg)](http://www.youtube.com/watch?v=lOo-MAD8gPo)
+Add the fork to your project's `platformio.ini` dependencies:
 
-## Github
-
-Contribute to this library development by creating an account on GitHub.
-
-Please give a star, if you find this library useful,
-this help an another people, discover it too.
-
-Please add an issue for problems or suggestion.
-
-
-## Benefits
-
-__SerialDebug__ is better than Arduino default debugging by Serial.print commands:
-
-### This is more __optimized__
-
-  Being or not debugging via USB cable,
-  the Serial.print command allways is processed,
-  waste CPU time on microcontroller.
-  In other words, the debug commands are processed,
-  with someone connected in the serial or not.  
-  
-  With __RemoteDebug__, all debug output is processed only
-  if exists anyone debugging via telnet or web app connection.
-
-  And with the debug levels of resource, the volume displayed
-  of messages are reduced for higher levels.
-  For example, only process all messages,
-  if the level is the lowest, the verbose,
-
-  __RemoteDebug__ is otimized to reduce overheads,
-  in CPU and memory and include client buffering feature.
-
-### Have __debug levels__
-
-  During the development, we can put a lot of debug messages...
-
-  But with __RemoteDebug__, we can put a level in each one.
-
-  For all messages (except levels always (debugA) or error (debugE),
-  the message only is processed and showed,
-  if debug level is equal or higher than it level
-
-  __RemoteDebug__ have 6 debug levels, in order of priority:
-
-  Alway showed:
-
-   __Error__:    Critical errors
-
-   __Always__:   Important messages
-
-  Another levels (showed if level is equal or higher that actual one):
-
-   __Warning__:  Error conditions but not critical
-
-   __Info__:     Information messages
-
-   __Debug__:    Extra information
-
-   __Verbose__:  More information than the usual  
-
-  So We can change the level to verbose, to see all messages.
-  Or to debug to see only debug or higher level, etc.
-
-  Is very good to reduce a quantity of messages that a project can generate,
-  to help debugging.
-
-### It is __easy__ to migrate
-
-  __RemoteDebug__ have a converter to help migrate your Arduino codes,
-  from Serial.prints to this library.
-
-  [RemoteDebugConverter](https://github.com/JoaoLopesF/RemoteDebugConverter)
-
-  Even if you want to do this manually, it's very simple. Please see topic [Using](#usage) above.
-
-### Have __auto__ function name and simple __profiler__
-
-  A simple debug:
-
-  ```cpp
-  debugV("* Run time: %02u:%02u:%02u (VERBOSE)", mRunHours, mRunMinutes, mRunSeconds);
-  ````
-
-  Can generate this output in serial monitor:
-
-        (V p:3065 loop C1) * Run time: 00:41:23 (VERBOSE)
-  
-        Where:  V: is the level
-                p: is a profiler time, elased, between this and previous debug
-                loop: is a function name, that executed this debug
-                C1: is a core that executed this debug (and a function of this) (only for ESP32)
-                The remaining is the message formatted (printf)
-
-  For ESP32, the core id in each debug is very good to optimizer multicore programming.
-
-### Have __commands__ to execute from telnet or web app
-
-  For example:
-
-- Show help (__?__)
-- Change the level of debug (__v__,__d__,__i__,__w__,__e__),
-   to show less or more messages.
-- See memory (__m__)
-- Reset the board (__reset__)
-
-   See about __RemoteDebug__ commands below.
-
-   You can add your own commands, see the examples please
-
-   If your project have __[RemoteDebugger](https://github.com/JoaoLopesF/RemoteDebugger)__ installed,
-   have a new commands, e.g. call a function, see/change variables, ...
-
-### Have a simple __software debugger__
-
-  Now __RemoteDebug__ (version >= 2.0.0), have an simple software debuggger,
-  based in codes of SerialDebug library.
-
-  This is another library, that act as an addon to __RemoteDebug__.
-
-  Please acess the RemoteDebugger repository to more informations: __[RemoteDebugger](https://github.com/JoaoLopesF/RemoteDebugger)__
-
-### Ready for __production__ (release compiler)
-
-    For release your device, just uncomment DEBUG_DISABLED in your project
-    Done this, and no more debug processing.
-    And better for DEBUG_DISABLED, __RemoteDebug__ have ZERO overhead,
-    due is nothing of this is compiled.
-
-## Telnet
-
-Telnet is a standard way of remotely connecting to a server and
-is supported on all operating systems (Windows, Mac, Linux...).
-
-MacOSx and Linux have a native telnet client.
-
-For Windows, a typical telnet client is the __Putty__: [putty](https://www.putty.org/) .
-
-Have a good tool for mobiles: the __Fing__, please find it in your mobile store.
-Its show all devices in local network (WiFi), show ports opened and can execute the telnet client too (external App)
-
-__RemoteDebug__  sets-up a telnet server which is listening to any telnet client that wants to connect. After connection, logging is streamed to the telnet client.
-
-__RemoteDebug__ is very simple to use, after a few lines of initialization code, you can use the well-known "print" commands to stream your logging to the remote client.
-
-### Debug levels
-
-__RemoteDebug__ supports the filtering of logging based on __debug levels__:
-
-Only show for it actual debug level:
-
-- Verbose
-- Debug
-- Info
-- Warnings
-
-Note: These levels are in the order of most-logging -> least-logging.
-
-Or for always show (not depends of actual debug level):
-
-- Any
-- Errors
-
-Note: All debugs is processed and showed only if have a client connection.
-
-The telnet client or web app can set the debug level by typing a few simple commands.
-
-### Profiler
-
-__RemoteDebug__ includes a simple profiler. It can be enabled by the connected client (telnet or web app)
-or the Arduino code itself.
-
-When enabled, it shows the time between 2 debug statements, using different colors depending on the elapsed time.
-
-A typical example would be to insert logging just before and after a function after which you can see how much the is spent in the function.
-
-### Lightweight
-
-__RemoteDebug__ is designed to give minimal overhead (connected or not) and
-only process debugs,if there is a client (telnet or web app) connected.
-
-### Custom commands
-
-__RemoteDebug__ supports custom commands that can be entered in the client (telnet or web app).
- These trigger the execution of a custom function in the Arduino code. For example this can be used to send back a status on request of the client.
-
-### DISCLAIMER
-
-The current version of __RemoteDebug__ does not yet include any encrypted authentication,
-only plain text and is intended only for development, not use in production/release.
-
-Future versions, if is possible, will include a secure way for authentication and further testing to support production environments.
-  
-## Wishlist
-
-    - An app to RemoteDebug like SerialDebug have.
-    - Http page to begin/stop the telnet server or websocket server.
-    - Authentication as telnet support (kerberos, etc.) to support production environment
-
-## Install
-
-Just download or clone this repository.
-
-Or for Arduino IDE, you can use the library manager to install and update the library.
-<!-- For install help, please see: [https://www.arduino.cc/en/Guide/Libraries](https://www.arduino.cc/en/Guide/Libraries) -->
-For install help, please click on this: [![arduino-library-badge](https://www.ardu-badge.com/badge/RemoteDebug.svg?)](https://www.ardu-badge.com/RemoteDebug)
-
-<!--![install](extras/readme_media/install.png)-->
-
-For another IDE, or not using the library manager of Arduino IDE,
-I suggest you use a [Github Desktop](https://desktop.github.com/) app  to clone,it help to keep updated.
-
-Please open the projects in example folder, to see it working.
-
-## Usage
-
-### includes
-
-```cpp
-#include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
+```ini
+lib_deps =
+    https://github.com/lucasnz/RemoteDebug.git
+    ESP32Async/ESPAsyncWebServer
 ```
 
-### instance
+Check the dependency requirements for your selected `ESPAsyncWebServer` release and add any required asynchronous TCP dependency if it is not installed automatically.
+
+If your project already uses `ESPAsyncWebServer`, avoid introducing conflicting versions of the same dependency.
+
+### Arduino IDE
+
+1. Download or clone this repository.
+2. Install the library in your Arduino libraries directory.
+3. Install a compatible `ESPAsyncWebServer` dependency and its required dependencies.
+4. Include `RemoteDebug.h` in your sketch.
+5. Configure the debugging transports required by your application.
+
+## Basic usage
+
+The following illustrates the general integration pattern. Adapt the Wi-Fi setup, WebSocket registration, and method calls to the API available in your checked-out revision.
+
+```cpp
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <RemoteDebug.h>
+
+AsyncWebServer server(80);
+AsyncWebSocket debugSocket("/debug");
 
 RemoteDebug Debug;
 
-### setup
+void setup() {
+  Serial.begin(115200);
 
-In the setup function after WiFi initialization
+  // Connect to Wi-Fi before starting remote debugging.
+  // Configure WiFi.begin(...) and wait for the connection.
 
-```cpp
-// Initialize the server (telnet or web socket) of RemoteDebug
+  Debug.begin("my-device", RemoteDebug::DEBUG);
 
-Debug.begin(HOST_NAME);
+  // Register the WebSocket endpoint with the web server.
+  server.addHandler(&debugSocket);
+  server.begin();
 
-// OR
+  // Attach the WebSocket transport to RemoteDebug.
+  Debug.attachWebSocket(&debugSocket);
 
-Debug.begin(HOST_NAME, startingDebugLevel);
+  Debug.setResetCmdEnabled(true);
 
-// Options
-
-Debug.setResetCmdEnabled(true); // Enable the reset command
-
-// Debug.showProfiler(true); // To show profiler - time between messages of Debug
-
-```
-
-Note: to enable the debugger, by RemoteDebugger, please acess this github repository:
-__[RemoteDebugger](https://github.com/JoaoLopesF/RemoteDebugger)__
-
-In the tail of loop function
-
-```cpp
-// Remote debug over WiFi
-
-Debug.handle();
-
-// Or
-
-debugHandle(); // Equal to SerialDebug
-
-```
-
-In any place of you code:
-
-```cpp
-#ifndef DEBUG_DISABLED
-if (Debug.isActive(Debug.<level>)) {
-    Debug.printf("bla bla bla: %d %s", number, str); // OR
-    Debug.printf("bla bla bla: %d %s", number, str.c_str()); // Note: if type is String need c_str() // OR
-    Debug.println("bla bla bla 2 ln");
-    Debug.printf("float: %f\n", value); // Not works in ESP8266 :-(
-    // Note: to show floats with printf (ESP8266 only),
-    // you can use my ArduinoUtil library -> https://github.com/JoaoLopesF/ArduinoUtil
-    Debug.printf("float: %s\n", Util.formatFloat(value, 0, 5).c_str());
+  debugI("RemoteDebug started");
 }
-#endif
-```
 
-Note: Using isActive, you need surround the code by DEBUG_DISABLE precompile condition,
-      to avoid compile it for production/release
+void loop() {
+  // Service the RemoteDebug library regularly.
+  Debug.handle();
 
-Or short way (equal to SerialDebug) (prefered if only one debug at time):
-
-```cpp
-debugA("This is a any (always showed) - var %d", var);
-debugV("This is a verbose - var %d", var);
-debugD("This is a debug - var %d", var);
-debugI("This is a information - var %d", var);
-debugW("This is a warning - var %d", var);
-debugE("This is a error - var %d", var);
-
-debugV("This is a println");
-```
-
-Or if your project uses several Serial.print commands to generate a single debug message
-for example:
-
-```cpp
-Serial.print("a = ");
-Serial.print(a);
-Serial.print(" b = ");
-Serial.print(b);
-Serial.print(" c = ");
-Serial.println(c);
-```
-
-can be use rdebug* macros:
-
-```cpp
-rdebugV("a = ");
-rdebugV(a);
-rdebugV(" b = ");
-rdebugV(b);
-rdebugV(" c = ");
-rdebugVln(c);
-```
-
-Note: in future, I suggest that you migrate this to a single debug command:
-
-```cpp
-debugV(a = %d b = %d c = %d", a, b, c);
-```
-
-An example of use debug levels: (supposing the data is a lot of characters)
-
-```cpp
-if (Debug.isActive(Debug.VERBOSE)) { // Debug message long
-    Debug.printf("routine: data received: %s\n", data.c_str()); // Note: if type is String need c_str()
-} else if (Debug.isActive(Debug.DEBUG)) { // Debug message short
-    Debug.printf("routine: data received: %s ...\n", data.substring(0, 20).c_str()); // %.20s not working :-|
+  debugD("Example debug message");
 }
 ```
 
-Starting at version 1.5.0, debug macros (debug* and rdebug*), automatically put the name of function that called the macro,
-and core id (core id only for ESP32).
+This example demonstrates the intended arrangement of the components; it is not a substitute for checking the exact method signatures in `src/RemoteDebug.h`. The application must also provide a compatible WebSocket client if it needs to display the output in a browser.
 
-So:
+### Logging messages
 
-```cpp
-void foo() {
-
-    uint8_t var = 1;
-    debugV("this is a debug - var %u", var);
-}
-
-```
-
-    It will show in client (telnet or web app):
-
-        (V p:^0000ms) (foo)(C1) this is a debug - var 1
-
-    Where:
-
-        V -> verbose
-        p -> profiler time
-        (foo) -> this is a function name that calls the debug macro
-        (C1) -> It is running it Core 1 (only for ESP32)
-
-An example of use debug with serial enabled
-
-    Useful to see messages if setup or
-    in cause the ESP8266/ESP32 is rebooting (client connection stop before received all messages)
-    Only for this purposes I suggest it
+Use the standard RemoteDebug logging macros:
 
 ```cpp
-// Setup after Debug.begin
-
-Debug.setSerialEnabled(true); // All messages too send to serial too, and can be see in serial monitor
+debugV("Verbose message");
+debugD("Debug message");
+debugI("Informational message");
+debugW("Warning message");
+debugE("Error message");
 ```
 
-For reduce overheads RemoteDebug is disconnect the client (telnet or web app), if it not active.
+Call `Debug.handle()` regularly from the Arduino `loop()` so the library can perform its normal processing.
 
-    - Please press enter or any key if you need keep the connection
-    - The default is 5 minutes (You can change it in RemoteDebug.h)  
-    - You can use mDNS to register each node with different name, it helps to connect without know the IP.
+## Examples
 
-Please not forget to use if clause with Debug.isActive (if not using debug macros)
+See the `examples/` directory for usage patterns included in the repository.
 
-    ---> This is very important to reduce overheads and work of debug levels
+| Example | Purpose |
+| --- | --- |
+| `RemoteDebug_Basic` | Basic setup and remote logging. |
+| `RemoteDebug_Advanced` | Advanced configuration, commands, and profiler functionality. |
+| `RemoteDebug_Debugger` | Debugger and command integration. |
+| `DualTransport` | Demonstrates integration of the WebSocket transport alongside the original debugging transport. |
 
-Please see the samples, basic or advanced, to learn how to use  
+Example availability and implementation details may vary between revisions. Check each example's comments and the library header before relying on a particular method or behaviour.
 
-In advanced sample, I used WifiManager library, ArduinoOTA and mDNS, please see it.
+## Buffering and output delivery
 
-## Releases
+WebSocket output may be buffered or batched to reduce the overhead of sending frequent log messages.
 
-### 3.0.5 - 2019-03-23
+The library exposes diagnostics for inspecting WebSocket buffering and dropped output. These are useful when investigating missing messages or a slow browser client.
 
-    - Ajustment on debugA macro, thanks @jetpax and @cmidgley to add this issue.
+Keep in mind:
 
-### 3.0.4 - 2019-03-19
+- Buffer capacity is finite.
+- A slow or disconnected client may not receive every message.
+- Dropped-output counters indicate that output has been lost; they do not recover missing messages.
+- Debugging output should not be used as a guaranteed-delivery messaging mechanism.
 
-    - All public configurations (#defines) have moved to RemoteDebugCfg.h, to facilitate changes for anybody.
-    - Changed examples, with warnings on change any #define in project,
-      with workarounds if it not work. (thanks to @22MarioZ for added this issue)
+If you need to diagnose output loss, monitor the available batch, buffer, and dropped-output statistics in your version of the library.
 
-### 3.0.3 - 2019-03-18
+## Security considerations
 
-    - Adjustments if web socket is disabled
+Remote debugging can expose internal application state and, depending on the configuration, debugging commands.
 
-### 3.0.2 - 2019-03-16
+- Use remote debugging only on a trusted network or behind a VPN.
+- Do not expose debugging endpoints directly to the public internet.
+- Use network firewall rules to restrict access.
+- Treat Telnet as an unencrypted transport, even when password protection is enabled.
+- Avoid logging passwords, tokens, or other sensitive information.
 
-    - Adjustments in examples, added one for debugger
+A password alone does not make an unencrypted debugging connection secure.
 
-### 3.0.1 - 2019-03-13
+## Compatibility and troubleshooting
 
-    - Adjustments in silente mode
-    - Commands from RemoteDebugApp now is treated
-    - Adjusts to RemoteDebugger support connection by web sockets
+If the library does not compile or the WebSocket transport does not behave as expected, check the following:
 
-### 3.0.0 - 2019-03-10
+1. Confirm that the installed library is this fork, rather than another copy of `RemoteDebug`.
+2. Check that the ESP32 Arduino core and asynchronous web-server dependencies are compatible.
+3. Confirm that the WebSocket endpoint is registered with the web server.
+4. Confirm that the WebSocket transport is attached using the method supported by the installed revision.
+5. Ensure `Debug.handle()` is called regularly.
+6. Check that the browser client connects to the configured WebSocket path.
+7. Inspect the compiler output for API differences between examples and the installed source.
+8. Test Telnet and WebSocket output separately before testing them together.
 
-    - If not disabled, add a web socket server to comunicate with RemoteDebugApp (HTML5 web app)
-    - The standard telnet still working, to debug with internet offline
-    - Ajustment on debugA macro, thanks @jetpax to add this issue
+For reproducible results, build the examples against the exact versions of the library and dependencies used by your application.
 
-### 2.1.2 - 2019-03-08
+## Contributing and issues
 
-    - Add empty rprint* macros, if debug is disabled
+Issues and contributions specific to this fork should be submitted through: [github.com/lucasnz/RemoteDebug](https://github.com/lucasnz/RemoteDebug)
 
-### 2.1.1 - 2019-03-06
+When reporting an issue, include:
 
-    - Create option DEBUG_DISABLE_AUTO_FUNC
-    - Create macros to be used for code converter: rprint and rprintln
-      RemoteDebug now have an code converters to help migrate codes
+- The board and ESP32 Arduino core version.
+- The library revision or commit.
+- The versions of `ESPAsyncWebServer` and its dependencies.
+- A minimal example that reproduces the issue.
+- Relevant compiler output or debugging logs.
 
-### 2.1.0 - 2019-03-04
+## Upstream project
 
-    - Create precompiler DEBUG_DISABLED to compile for production/release,
-      equal that have in SerialDebug
-    - Adjustments in examples
+This project is derived from: [ktos/RemoteDebug](https://github.com/ktos/RemoteDebug), which builds on [JoaoLopesF/RemoteDebug]((https://github.com/JoaoLopesF/RemoteDebug)
 
-### 2.0.1 - 2019-03-01
-
-    - Adjustments for the debugger: it still disable until dbg command, equal to SerialDebug
-    - The callback will to be called before print debug messages now
-    - And only if debugger is enabled in RemoteDebugger (command dbg)
-    -  Changed handle debugger logic
-
-### 2.0.0 - 2019-02-28
-
-    - Added support to RemoteDebug addon library: the RemoteDebugger, an simple software debugger, based on SerialDebug
-    - New color system
-
-### 1.5.9 - 2019-02-18
-
-    - Bug -> sometimes the command is process twice
-    - Workaround -> check time
-
-### 1.5.8 - 2019-02-08
-
-    - New macros to compatibility with SerialDebug (can use RemoteDebug or SerialDebug) thanks to @phrxmd
-
-### 1.5.7 - 2018-11-03
-
-    - Fixed bug for MAX_TIME_INACTIVE, thanks to @achuchev to add this issue
-
-### 1.5.6 - 2018-10-19
-
-    - Adjustments based on pull request from @jeroenst (to allow serial output with telnet password and setPassword method)
-
-### 1.5.5 - 2018-10-19
-
-    - Serial output is now not allowed if telnet password is enabled
-    - Few adjustments
-
-### 1.5.4 - 2018-10-05
-
-    - Few adjustment in write logic
-
-### 1.5.3 - 2018-09-04
-
-    - Serial output adjustments (due bug in password logic)
-
-### 1.5.2
-
-    - Correct rdebug macro (thanks @stritti)
-
-### 1.5.1 - 2018-08-28
-
-    - New silent mode (command s)
-  
-### 1.5.0 - 2018-08=26
-
-    - Auto function name and ESP32 core id for rdebug* macros
-    - begin method have a option for port number
-    - Few adjustments
-    - Added new rdebug?ln to put auto new line
-
-### 1.4.0 - 2018-08-18
-
-    - Simple text password request feature (disabled by default)
-
-        Notes:
-          It is very simple feature, only text, no cryptography,
-          and the password is echoed in screen (I not discovery yet how disable it)
-
-          telnet use advanced authentication (kerberos, etc.)
-          Such as now RemoteDebug is not for production (releases),
-          this kind of authentication will not be done now.
-
-### 1.3.1 - 2018-08-18
-
-    - Adjustments in precompiler macros
-
-### 1.3.0 - 2018-08-17
-
-    - Bug in write with latest ESP8266 SDK
-    - Port number can be modified in project Arduino (.ino file)
-    -  Few adjustments as ESP32 includes
-
-### 1.2.2
-
-    - Adjustments, as avoid ESP32 include errors
-    - Telnet port of server can be modified by project
-      Just put it in your .ino, before the include:
-
-### 1.2.0
-
-    - Shortcuts and client buffering to avoid mysterious delay of ESP networking
-
-### 1.1.0
-
-    - Adjustments and now runs in Esp32 too.
-
-### 1.0.0
-
-    - Adjustments and improvements from Beta versions.
-
-      New features:
-
-        - Filter
-        - Colors
-        - Support to Windows telnet client
-
-### 0.9
-
-    - First Beta
-
-## Known issues
-
-    - Sometimes (rarely) the connection over telnet becomes very slow.
-      Especially right after uploading firmware.
-      Reset command in telnet connection or turn off/on can be resolve it.
-      But I need find why it occurs
-
-## Thanks
-
-    First thanks a lot for Igrr for bring to us the Arduino ESP8266 and to Espressif to Arduino ESP32
-
-    Thanks to Links2004 for a good web server socket, used for web app connection.
-
-    For the logo: thanks to a freepik and pngtree sites for free icons that have in logo
-
-    Resources:
-
-      - Example of TelnetServer code in http://www.rudiswiki.de/wiki9/WiFiTelnetServer
-      - arduinoWebSockets library in https://github.com/Links2004/arduinoWebSockets
-
-## End of README
-
-Hit counter on this file, starting at 2019-03-03:
-[![HitCount](http://hits.dwyl.io/JoaoLopesF/RemoteDebug.svg)](http://hits.dwyl.io/JoaoLopesF/RemoteDebug)
+Please refer to the upstream repository for the history and original implementation of RemoteDebug. Changes and extensions specific to this fork are maintained in: [lucasnz/RemoteDebug](https://github.com/lucasnz/RemoteDebug)

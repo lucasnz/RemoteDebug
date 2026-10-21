@@ -1,88 +1,3 @@
-/*
- * Libraries Arduino
- * *****************
- * Library : Remote debug - debug over telnet - for Esp8266 (NodeMCU) or ESP32
- * Author  : Joao Lopes
- * Comments: Telnet server based on example of TelnetServer code in http: *www.rudiswiki.de/wiki9/WiFiTelnetServer
- *           Web socket server uses the arduinWebSockets library (https://github.com/Links2004/arduinoWebSockets)
- *           The author uses Eclise IDE (sloeber) to made this source
- * License : See RemoteDebug.h
- *
- * Versions:
- *  ------	----------	-----------------
- *  3.0.5	2019-03-32  Ajustment on debugA macro, thanks @jetpax and @cmidgley to add this issue
- *  3.0.4	2019-03-19  All public configurations (#defines) have moved to RemoteDebugCfg.h, to facilitate changes for anybody.
- * 						Changed examples with warnings on change any #define in project,
- *					    with workarounds, if it not work. (thanks to @22MarioZ for added this issue)
- *  3.0.3	2019-03-18	Adjustments if web socket is disabled
- *  3.0.2	2019-03-16	Adjustments in examples, added one for debugger
- *  3.0.1	2019-03-13	Adjustments in silente mode
- *                      Commands from RemoteDebugApp now is treated
- *                      Adjusts to RemoteDebugger support connection by web sockets
- *	3.0.0	2019-03-11	If not disabled, add a web socket server to comunicate with RemoteDebugApp (HTML5 web app)
- *	                    The standard telnet still working, to debug with internet offline
- *	                    Ajustment on debugA macro, thanks @jetpax to add this issue
- *  2.1.2	2019-03-08	Add empty rprint* macros, if debug is disabled
- *  2.1.1	2019-03-06	Create option DEBUG_DISABLE_AUTO_FUNC
- *                      Create macros to be used for code converter: rprint and rprintln
- *    					RemoteDebug now have an code converters to help migrate codes
- *
- *  2.1.0	2019-03-04	Create precompiler DEBUG_DISABLED to compile for production/release,
- *                      equal that have in SerialDebug
- *                      Adjustments in examples
- *
- *  2.0.2	2019-03-03	Just to do new release, to update other files
- * 	2.0.1	2019-03-01  Adjustments for the debugger: it still disable until dbg command, equal to SerialDebug
- * 						The callback will to be called before print debug messages now
- * 						And only if debugger is enabled in RemoteDebugger (command dbg)
- * 					    Changed handle debugger logic
- *
- *	2.0.0 	2019-02-28	Added support to RemoteDebug addon library: the RemoteDebugger, an simple software debugger, based on SerialDebug
- *						New color system (uncomment COLOR_NEW_SYSTEM in remotedebug.h to return to old way)
- *	1.5.9 	2019-02-18	Bug> sometimes the processCommand is executed twice. Workaround> check time
- *	1.5.8 	2019-02-08	New macros to compatibility with SerialDebug (can use RemoteDebug or SerialDebug) thanks to @phrxmd
- * 	1.5.7 	2018-11-03	Fixed bug for MAX_TIME_INACTIVE
- * 	1.5.6 	2018-10-19	Adjustments based on pull request from @jeroenst (to allow serial output with telnet password and setPassword method)
- * 	1.5.5 	?			Serial output is now not allowed if telnet password is enabled
- * 	1.5.4 	?			Serial output not depending of telnet password (thanks @jeroenst for suggestion)
- * 	1.5.3 	?			Serial output adjustments (due bug in password logic)
- * 	1.5.2 	?			Correct rdebug macro (thanks @stritti)
- * 	1.5.1 	?			New command: silence
- *  		  			Added new rdebug?ln to put auto new line
- *  		  			Auto function and core if (for ESP32) in rdebug macros
- *  		  			Class destructor implemented
- * 	1.5.0 	?			Port can be pass in begin method (thanks @PjotrekSE for suggestion)
- *     	  				Few adjustments
- *     					this kind of authentication will not be done now.
- *      				Such as RemoteDebug now is not for production releases,
- *     			 		Note: telnet use advanced authentication (kerberos, etc.)
- *	1.4.0 	?			A simple text password request, if enabled (thanks @jeroenst for suggestion)
- *	1.3.1 	?			Retired # from VARGS precompiler macros
- *  		  			Few adjustments as ESP32 includes
- *  	      			Port number can be modified in project Arduino (.ino file)
- *	1.3.0 	Aug 2018	Bug in write with latest ESP8266 SDK
- *	1.2.1 	?			Adjusts to not cause error in Arduino
- *	1.2.0 	?			Added shortcuts and buffering to avoid delays
- *	1.1.1 	2017-11-24	Added support for the pass through of commands, and default debug levels thanks B. Harville
- *	1.1.0 	Aug 2017	Support to ESP32
- *          			New commands for CPU frequencies
- *	   	  				New level> profiler and auto-profiler
- *	1.0.1 	Aug 2017	New connection logic
- *	1.0.0 	Jan 2017	First RC
- *	0.9.1 	Oct 2016	Beta 2
- *	0.9.0 	Aug 2016	Beta 1
- *
- */
-
-/*
- *  TODO: 	- Page HTML for begin/stop Telnet server
- *          - Add support to another Arduino WiFi boards (if have demand on it)
- */
-
-///// RemoteDebug configuration
-
-#include "RemoteDebugCfg.h"
-
 ///// Debug disable for compile to production/release ?
 ///// as nothing of RemotedDebug is compiled, zero overhead :-)
 
@@ -90,20 +5,11 @@
 
 ///// Defines
 
-#define VERSION "3.0.5"
+#define VERSION "4.0.0" // Version of library
 
 ///// Includes
 
 #include "stdint.h"
-
-#if defined(ESP8266)
-// ESP8266 SDK
-extern "C"
-{
-	bool system_update_cpu_freq(uint8_t freq);
-}
-#endif
-
 #include "Arduino.h"
 #include "Print.h"
 
@@ -112,27 +18,14 @@ extern "C"
 #error "RemoteDebug cannot be used with SerialDebug"
 #endif
 
-// ESP8266 or ESP32 ?
-
-#if defined(ESP8266)
-
-#include <ESP8266WiFi.h>
-
-#elif defined(ESP32)
-
-#include <WiFi.h>
-
-#else
-
-#error Only for ESP8266 or ESP32
-
+// This library targets ESP32 only.
+#if !defined(ESP32)
+#error "RemoteDebug supports ESP32 only"
 #endif
+#include <WiFi.h>
 
 #include "RemoteDebug.h" // This library
 
-#ifdef ALPHA_VERSION // In test, not good yet
-#include "telnet.h"
-#endif
 
 // Internal print macros for send messages to client
 
@@ -207,7 +100,7 @@ bool RemoteDebug::begin(String hostName, uint16_t port, uint8_t startingDebugLev
 #ifdef CLIENT_BUFFERING
 	// Reserve space to buffer of send
 
-	_bufferPrint.reserve(MAX_SIZE_SEND);
+	_bufferSend.reserve(MAX_SIZE_SEND);
 
 #endif
 
@@ -284,6 +177,10 @@ void RemoteDebug::stop()
 	// Stop server
 
 	TelnetServer.stop();
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    if (_webSocket) _webSocket->closeAll();
+    clearWebBuffers();
+#endif
 }
 
 // Handle the connection (in begin of loop in sketch)
@@ -291,75 +188,37 @@ void RemoteDebug::stop()
 
 void RemoteDebug::handle()
 {
-
-#ifdef ALPHA_VERSION // In test, not good yet
-	static uint32_t lastTime = millis();
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    sendWebBatch();
+    if (_webSocket && (uint32_t)(millis() - _webLastCleanup) >= 1000) {
+        _webLastCleanup = millis();
+        _webSocket->cleanupClients();
+    }
 #endif
+
 
 #ifdef DEBUGGER_ENABLED
 	static uint32_t dbgTimeHandle = millis(); // To avoid call the handler desnecessary
 	static boolean dbgLastConnected = false;  // Last is connected ?
 #endif
 
-	// Silence timeout ?
-
-	if (_silence && _silenceTimeout > 0 && millis() >= _silenceTimeout)
-	{
-
-		// Get out of silence mode
-
-		silence(false, true);
-	}
 
 	// Debug level is profiler -> set the level before
 
 	if (_clientDebugLevel == PROFILER)
 	{
-		if (millis() > _levelProfilerDisable)
+		if ((int32_t)(millis() - _levelProfilerDisable) > 0)
 		{
 			_clientDebugLevel = _levelBeforeProfiler;
 			debugPrintln("* Debug level profile inactive now");
 		}
 	}
 
-#ifdef ALPHA_VERSION // In test, not good yet
-
-	// Automatic change to profiler level if time between handles is greater than n millis
-
-	if (_autoLevelProfiler > 0 && _clientDebugLevel != PROFILER)
-	{
-
-		uint32_t diff = (millis() - lastTime);
-
-		if (diff >= _autoLevelProfiler)
-		{
-			_levelBeforeProfiler = _clientDebugLevel;
-			_clientDebugLevel = PROFILER;
-			_levelProfilerDisable = 1000; // Disable it at 1 sec
-
-			debugPrintf("* Debug level profile active now - time between handels: %u\r\n", diff);
-		}
-
-		lastTime = millis();
-	}
-#endif
 
 	// look for Client connect trial
 
 	if (TelnetServer.hasClient())
 	{
-
-		// Old connection logic
-
-		//      if (!TelnetClient || !TelnetClient.connected()) {
-		//
-		//        if (TelnetClient) { // Close the last connect - only one supported
-		//
-		//          TelnetClient.stop();
-		//
-		//        }
-
-		// New connection logic - 10/08/17
 
 		if (TelnetClient && TelnetClient.connected())
 		{
@@ -367,7 +226,7 @@ void RemoteDebug::handle()
 			// Verify if the IP is same than actual conection
 
 			WiFiClient newClient; // @suppress("Abstract class cannot be instantiated")
-			newClient = TelnetServer.available();
+			newClient = TelnetServer.accept();
 			String ip = newClient.remoteIP().toString();
 
 			if (ip == TelnetClient.remoteIP().toString())
@@ -393,19 +252,13 @@ void RemoteDebug::handle()
 
 			// New TCP client
 
-			TelnetClient = TelnetServer.available();
+			TelnetClient = TelnetServer.accept();
 
 			// Password request ? - 18/07/18
 
 			if (_password != "")
 			{
 
-#ifdef ALPHA_VERSION // In test, not good yet
-				// Send command to telnet client to not do local echos
-				// Experimental code !
-
-				sendTelnetCommand(TELNET_WONT, TELNET_ECHO);
-#endif
 			}
 		}
 
@@ -461,22 +314,33 @@ void RemoteDebug::handle()
 
 					// Process the command
 
-					if (_command.length() > 0)
+					if (_commandOverflow)
 					{
-
+						debugPrintln("* Command too long; discarded");
+						_commandOverflow = false;
+					}
+					else if (_command.length() > 0)
+					{
 						_lastCommand = _command; // Store the last command
 						processCommand();
 					}
 				}
 
 				_command = ""; // Init it for next command
+				_commandOverflow = false;
 			}
 			else if (isPrintable(character))
 			{
 
-				// Concat
-
+				// Bound memory usage from untrusted Telnet input.
+#ifdef REMOTEDEBUG_MAX_COMMAND_LENGTH
+				if (_command.length() < REMOTEDEBUG_MAX_COMMAND_LENGTH)
+					_command.concat(character);
+				else
+					_commandOverflow = true;
+#else
 				_command.concat(character);
+#endif
 			}
 
 			// Last char
@@ -593,13 +457,18 @@ void RemoteDebug::disconnect(boolean onlyTelnetClient)
 	}
 
 	_silence = false;
-	_silenceTimeout = 0;
 
 	if (_connected)
 	{ // By telnet
 		TelnetClient.stop();
 		_connected = false;
 	}
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    if (!onlyTelnetClient && _webSocket) {
+        _webSocket->closeAll();
+        clearWebBuffers();
+    }
+#endif
 }
 
 // Connection/disconnection event
@@ -621,7 +490,6 @@ void RemoteDebug::onConnection(boolean connected)
 	_lastTimePrint = millis(); // Clear the time
 
 	_silence = false; // No silence
-	_silenceTimeout = 0;
 
 #ifdef CLIENT_BUFFERING
 	// Client buffering - send data in intervals to avoid delays or if its is too big
@@ -669,9 +537,12 @@ void RemoteDebug::onConnection(boolean connected)
 boolean RemoteDebug::isConnected()
 {
 
-	// Is connected
-
-	return _connected;
+	// Connected through either transport
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    return _connected || hasWebClients();
+#else
+    return _connected;
+#endif
 }
 
 // Send to serial too (use only if need)
@@ -704,14 +575,6 @@ void RemoteDebug::showProfiler(boolean show, uint32_t minTime)
 	_minTimeShowProfiler = minTime;
 }
 
-#ifdef ALPHA_VERSION // In test, not good yet
-// Automatic change to profiler level if time between handles is greater than n mills (0 - disable)
-
-void RemoteDebug::autoProfilerLevel(uint32_t millisElapsed)
-{
-	_autoLevelProfiler = millisElapsed;
-}
-#endif
 
 // Show debug level
 
@@ -738,24 +601,16 @@ void RemoteDebug::showRaw(boolean show)
 
 boolean RemoteDebug::isActive(uint8_t debugLevel)
 {
-
-	// Active ->
-	//	Not in silence (new)
-	//	Debug level ok and
-	//	Telnet connected or
-	//	Serial enabled (use only if need)
-	//	Password ok (if enabled) - 18/08/18
-
-	boolean ret = (debugLevel >= _clientDebugLevel &&
-				   !_silence &&
-				   (_connected || _serialEnabled));
-
-	if (ret)
-	{
-		_lastDebugLevel = debugLevel;
-	}
-
-	return ret;
+    boolean telnetActive = (debugLevel >= _clientDebugLevel && !_silence && (_connected || _serialEnabled));
+    if (telnetActive) _lastDebugLevel = debugLevel;
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    _webRouteLevel = debugLevel;
+    _webRouteActive = (_webSocket && hasWebClients() && !_webSilenced && !_silence && debugLevel >= _webLevel);
+    _webRoutePending = telnetActive || _webRouteActive;
+    return telnetActive || _webRouteActive;
+#else
+    return telnetActive;
+#endif
 }
 
 // Set help for commands over telnet set by sketch
@@ -784,7 +639,7 @@ size_t RemoteDebug::write(const uint8_t *buffer, size_t size)
 {
 
 	// Process buffer
-	// Insert due a write bug w/ latest Esp8266 SDK - 17/08/18
+	// Write byte buffer
 
 	for (size_t i = 0; i < size; i++)
 	{
@@ -810,6 +665,9 @@ size_t RemoteDebug::write(uint8_t character)
 	// Connected ?
 
 	boolean connected = _connected;
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    writeWebCharacter(character);
+#endif
 
 	// In silente mode now ?
 
@@ -1314,11 +1172,7 @@ void RemoteDebug::showHelp()
 
 	// Show help
 
-#if defined(ESP8266)
-	help.concat("*** Remote debug - over telnet - for ESP8266 (NodeMCU) - version ");
-#elif defined(ESP32)
-	help.concat("*** Remote debug - over telnet - for ESP32 - version ");
-#endif
+	help.concat("*** Remote debug - over Telnet - for ESP32 - version ");
 	help.concat(VERSION);
 	help.concat("\r\n");
 	help.concat("* Host name: ");
@@ -1352,26 +1206,14 @@ void RemoteDebug::showHelp()
 		"      p      -> show time between actual and last message (in millis)\r\n");
 	help.concat("      p min  -> show only if time is this minimal\r\n");
 	help.concat("      P time -> set debug level to profiler\r\n");
-#ifdef ALPHA_VERSION // In test, not good yet
-	help.concat("      A time -> set auto debug level to profiler\r\n");
-#endif
 	help.concat("    c -> show colors\r\n");
 	help.concat("    filter:\r\n");
 	help.concat("          filter <string> -> show only debugs with this\r\n");
 	help.concat("          nofilter        -> disable the filter\r\n");
-#if defined(ESP8266)
-	help.concat("    cpu80  -> ESP8266 CPU a 80MHz\r\n");
-	help.concat("    cpu160 -> ESP8266 CPU a 160MHz\r\n");
-	if (_resetCommandEnabled)
-	{
-		help.concat("    reset -> reset the ESP8266\r\n");
-	}
-#elif defined(ESP32)
 	if (_resetCommandEnabled)
 	{
 		help.concat("    reset -> reset the ESP32\r\n");
 	}
-#endif
 
 	// Callbacks
 
@@ -1426,19 +1268,6 @@ void RemoteDebug::clearLastCommand()
 void RemoteDebug::processCommand()
 {
 
-	static uint32_t lastTime = 0;
-
-	// Bug -> sometimes the command is process twice
-	// Workaround -> check time
-	// TODO: see correction for this
-
-	if (lastTime > 0 && (millis() - lastTime) < 500)
-	{
-		debugPrintln("* Bug workaround: ignoring command repeating");
-		return;
-	}
-	lastTime = millis();
-
 	D("cmd: %s", _command.c_str());
 
 	// Password request ? - 18/07/18
@@ -1453,9 +1282,6 @@ void RemoteDebug::processCommand()
 
 			_passwordOk = true;
 
-#ifdef ALPHA_VERSION									 // In test, not good yet
-			sendTelnetCommand(TELNET_WILL, TELNET_ECHO); // Send a command to telnet to restore echoes = 18/08/18
-#endif
 			showHelp();
 		}
 		else
@@ -1538,25 +1364,6 @@ void RemoteDebug::processCommand()
 		debugPrint("* Free Heap RAM: ");
 		debugPrintln(free);
 
-#if defined(ESP8266)
-	}
-	else if (_command == "cpu80")
-	{
-
-		// Change ESP8266 CPU para 80 MHz
-
-		system_update_cpu_freq(80);
-		debugPrintln("CPU ESP8266 changed to: 80 MHz");
-	}
-	else if (_command == "cpu160")
-	{
-
-		// Change ESP8266 CPU para 160 MHz
-
-		system_update_cpu_freq(160);
-		debugPrintln("CPU ESP8266 changed to: 160 MHz");
-
-#endif
 	}
 	else if (_command == "v")
 	{
@@ -1686,26 +1493,6 @@ void RemoteDebug::processCommand()
 			"* Debug level set to Profiler (disable in %u millis)\r\n",
 			_levelProfilerDisable);
 	}
-	else if (_command == "A")
-	{
-
-		// Auto debug level profile
-
-		_autoLevelProfiler = 1000; // Default
-
-		if (options.length() > 0)
-		{ // With time of disable
-			int32_t aux = options.toInt();
-			if (aux > 0)
-			{ // Valid number
-				_autoLevelProfiler = aux;
-			}
-		}
-
-		debugPrintf(
-			"* Auto profiler debug level active (time >= %u millis)\r\n",
-			_autoLevelProfiler);
-	}
 	else if (_command == "c")
 	{
 
@@ -1733,11 +1520,7 @@ void RemoteDebug::processCommand()
 
 		debugPrintln("* Closing client connection ...");
 
-#if defined(ESP8266)
-		debugPrintln("* Resetting the ESP8266 ...");
-#elif defined(ESP32)
 		debugPrintln("* Resetting the ESP32 ...");
-#endif
 
 		TelnetClient.stop();
 		TelnetServer.stop();
@@ -1809,7 +1592,7 @@ void RemoteDebug::setNoFilter()
 
 // Silence
 
-void RemoteDebug::silence(boolean activate, boolean showMessage, boolean fromBreak, uint32_t timeout)
+void RemoteDebug::silence(boolean activate, boolean showMessage)
 {
 
 	// Set silence and timeout
@@ -1833,7 +1616,10 @@ void RemoteDebug::silence(boolean activate, boolean showMessage, boolean fromBre
 	// Set it
 
 	_silence = activate;
-	_silenceTimeout = (timeout == 0) ? 0 : (millis() + timeout);
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    _webSilenced = activate;
+    if (activate) clearWebBuffers();
+#endif
 }
 
 boolean RemoteDebug::isSilence()
@@ -1899,19 +1685,6 @@ String RemoteDebug::expand(String string)
 	return string;
 }
 
-#ifdef ALPHA_VERSION // In test, not good yet
-// Send telnet commands (as used with password request) - 18/08/18
-// Experimental code !
-
-void RemoteDebug::sendTelnetCommand(uint8_t command, uint8_t option)
-{
-
-	// Send a command to the telnet client
-
-	debugPrintf("%c%c%c", TELNET_IAC, command, option);
-	TelnetClient.flush();
-}
-#endif
 
 #else // DEBUG_DISABLED
 
@@ -1922,3 +1695,108 @@ void RemoteDebug::sendTelnetCommand(uint8_t command, uint8_t option)
 #endif // DEBUG_DISABLED
 
 /////// End
+
+
+#if defined(REMOTEDEBUG_ENABLE_WEBSOCKET) && !defined(DEBUG_DISABLED)
+void RemoteDebug::flush()
+{
+    flushWebSocketLine();
+    sendWebBatch(true);
+    if (TelnetClient) TelnetClient.flush();
+}
+
+void RemoteDebug::writeWebCharacter(uint8_t character)
+{
+    bool active;
+    uint8_t level;
+    if (_webRoutePending) {
+        active = _webRouteActive;
+        level = _webRouteLevel;
+    } else {
+        active = (_webSocket && hasWebClients() && !_webSilenced && !_silence);
+        level = ANY;
+    }
+    if (!active) {
+        if (character == '\n') { _webRoutePending = false; _webRouteActive = false; }
+        return;
+    }
+    if (character == '\r') return;
+    if (!_webLineHasLevel) { _webLineLevel = level; _webLineHasLevel = true; }
+    if (character == '\n') {
+        flushWebSocketLine();
+        _webRoutePending = false;
+        _webRouteActive = false;
+        _webRouteLevel = ANY;
+        return;
+    }
+    if (_webLine.length() >= WEB_MAX_LINE_LENGTH) flushWebSocketLine();
+    if (_webLine.length() < WEB_MAX_LINE_LENGTH) _webLine += (char)character;
+}
+
+void RemoteDebug::flushWebSocketLine()
+{
+    if (_webLine.isEmpty()) { _webLineHasLevel = false; return; }
+    String line;
+    line.reserve(_webLine.length() + 32);
+    line = makeWebPrefix(_webLineLevel);
+    line += _webLine;
+    size_t needed = line.length() + 1;
+    if (_webBatch.length() + needed <= WEB_MAX_BATCH_LENGTH) {
+        _webBatch += line;
+        _webBatch += '\n';
+    } else {
+        ++_webDroppedLines;
+        _webDroppedBytes += needed;
+    }
+    _webLine = "";
+    _webLineHasLevel = false;
+}
+
+void RemoteDebug::sendWebBatch(bool force)
+{
+    if (!_webSocket || !hasWebClients() || _webSilenced || _silence) {
+        clearWebBuffers();
+        return;
+    }
+    uint32_t now = millis();
+    if (!force && (uint32_t)(now - _webLastBatchSend) < WEB_BATCH_INTERVAL_MS) return;
+    if (!_webBatch.isEmpty()) { _webSocket->textAll(_webBatch); _webBatch = ""; }
+    if (_webDroppedLines) {
+        String warning = "[Web debug dropped "; warning += String(_webDroppedLines);
+        warning += " lines / "; warning += String(_webDroppedBytes); warning += " bytes: output buffer full]";
+        _webSocket->textAll(warning);
+        _webDroppedLines = 0; _webDroppedBytes = 0;
+    }
+    _webLastBatchSend = now;
+}
+
+String RemoteDebug::makeWebPrefix(uint8_t level)
+{
+    if (!_webShowLevel && !_webShowProfiler) return "";
+    String prefix = "(";
+    if (_webShowLevel) {
+        switch (level) {
+            case PROFILER: prefix += 'P'; break;
+            case VERBOSE: prefix += 'V'; break;
+            case DEBUG: prefix += 'D'; break;
+            case INFO: prefix += 'I'; break;
+            case WARNING: prefix += 'W'; break;
+            case ERROR: prefix += 'E'; break;
+            default: prefix += 'A'; break;
+        }
+    }
+    if (_webShowLevel && _webShowProfiler) prefix += ' ';
+    if (_webShowProfiler) {
+        uint32_t now = millis();
+        uint32_t elapsed = _webLastLogTime ? (uint32_t)(now - _webLastLogTime) : 0;
+        _webLastLogTime = now;
+        prefix += "p:^";
+        if (elapsed < 1000) prefix += '0';
+        if (elapsed < 100) prefix += '0';
+        if (elapsed < 10) prefix += '0';
+        prefix += String(elapsed); prefix += "ms";
+    }
+    prefix += ") ";
+    return prefix;
+}
+#endif

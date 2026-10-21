@@ -1,31 +1,3 @@
-/*
- * Header for RemoteDebug
- *
- * MIT License
- *
- * Copyright (c) 2019 Joao Lopes
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *
- */
-
 #ifndef REMOTEDEBUG_H
 #define REMOTEDEBUG_H
 #pragma once
@@ -95,21 +67,15 @@
 #include "Arduino.h"
 #include "Print.h"
 
-// ESP8266 or ESP32 ?
-
-#if defined(ESP8266)
-
-#include <ESP8266WiFi.h>
-
-#elif defined(ESP32)
-
-#include <WiFi.h>
-
-#else
-
-#error "Only for ESP8266 or ESP32"
-
+#if defined(REMOTEDEBUG_ENABLE_WEBSOCKET) && !defined(DEBUG_DISABLED)
+#include <ESPAsyncWebServer.h>
 #endif
+
+// This library targets ESP32 only.
+#if !defined(ESP32)
+#error "RemoteDebug supports ESP32 only"
+#endif
+#include <WiFi.h>
 
 ////// Shortcuts macros
 
@@ -137,7 +103,7 @@
 
 	#endif
 
-	#ifndef DEBUG_AUTO_CORE // No auto core or for ESP8266
+	#ifndef DEBUG_AUTO_CORE // Core ID prefix disabled
 
 		#define rdebugA(fmt, ...) if (Debug.isActive(Debug.ANY)) 		Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
 		#define rdebugP(fmt, ...) if (Debug.isActive(Debug.PROFILER)) 	Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
@@ -259,16 +225,70 @@ class RemoteDebug: public Print
 
 	void setCallBackNewClient(void (*callback)());
 
-#ifdef ALPHA_VERSION // In test, not good yet
-	void autoProfilerLevel(uint32_t millisElapsed);
-#endif
 
 	void setFilter(String filter);
 	void setNoFilter();
 
 	boolean isActive(uint8_t debugLevel = DEBUG);
 
-	void silence(boolean activate, boolean showMessage = true, boolean fromBreak = false, uint32_t timeout = 0);
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    // Optional AsyncWebServer transport. The application owns the socket.
+    void attachWebSocket(AsyncWebSocket* socket) {
+        _webSocket = socket;
+        _webLine.reserve(WEB_MAX_LINE_LENGTH);
+        _webBatch.reserve(WEB_MAX_BATCH_LENGTH);
+    }
+    void detachWebSocket() {
+        flushWebSocketLine();
+        sendWebBatch(true);
+        _webSocket = nullptr;
+        clearWebBuffers();
+    }
+    void flush() override;
+    void setWebDebugLevel(uint8_t level) { if (level <= ANY) _webLevel = level; }
+    uint8_t getWebDebugLevel() const { return _webLevel; }
+    void setWebSilenced(bool enabled) { _webSilenced = enabled; if (enabled) clearWebBuffers(); }
+    bool isWebSilenced() const { return _webSilenced; }
+    size_t webClientCount() const { return _webSocket ? _webSocket->count() : 0; }
+    bool hasWebClients() const { return webClientCount() > 0; }
+    size_t webBatchLength() const { return _webBatch.length(); }
+    size_t webBatchCapacity() const { return WEB_MAX_BATCH_LENGTH; }
+    uint32_t droppedWebLines() const { return _webDroppedLines; }
+    uint32_t droppedWebBytes() const { return _webDroppedBytes; }
+    static int parseLevel(String level) {
+        level.trim(); level.toLowerCase();
+        if (level == "profiler") return PROFILER;
+        if (level == "verbose" || level == "v") return VERBOSE;
+        if (level == "debug" || level == "d") return DEBUG;
+        if (level == "info" || level == "i") return INFO;
+        if (level == "warning" || level == "warn" || level == "w") return WARNING;
+        if (level == "error" || level == "e") return ERROR;
+        if (level == "any" || level == "a") return ANY;
+        return -1;
+    }
+    static const char* levelName(uint8_t level) {
+        switch (level) {
+            case PROFILER: return "profiler";
+            case VERBOSE: return "verbose";
+            case DEBUG: return "debug";
+            case INFO: return "info";
+            case WARNING: return "warning";
+            case ERROR: return "error";
+            case ANY: return "any";
+            default: return "unknown";
+        }
+    }
+    void sendWebMessage(const String& message) {
+        if (_webSocket && hasWebClients() && !_webSilenced) _webSocket->textAll(message);
+    }
+    void sendWebMessage(AsyncWebSocketClient* client, const String& message) {
+        if (client) client->text(message);
+    }
+    void showWebDebugLevel(bool enabled) { _webShowLevel = enabled; }
+    void showWebProfiler(bool enabled) { _webShowProfiler = enabled; if (enabled) _webLastLogTime = millis(); }
+#endif
+
+	void silence(boolean activate, boolean showMessage = true);
 	boolean isSilence();
 
 	void onConnection(boolean connected);
@@ -285,7 +305,7 @@ class RemoteDebug: public Print
 
 	virtual size_t write(uint8_t);
 
-    virtual size_t write(const uint8_t *buffer, size_t size); // Insert due a write bug w/ latest Esp8266 SDK - 17/08/18
+    virtual size_t write(const uint8_t *buffer, size_t size); // Write byte buffer
 
     // Debug levels
 
@@ -319,8 +339,7 @@ private:
 	uint8_t _passwordAttempt = 0;
 
 	boolean _silence = false;			// Silence mode ?
-	uint32_t _silenceTimeout = 0;		// Silence timeout
-
+	
 	uint8_t _clientDebugLevel = DEBUG;	// Level setted by user in web app or telnet client
 	uint8_t _lastDebugLevel = DEBUG;	// Last Level setted by active()
 
@@ -328,7 +347,6 @@ private:
 
 	uint8_t _levelBeforeProfiler=DEBUG;	// Last Level before Profiler level
 	uint32_t _levelProfilerDisable = 0;	// time in millis to disable the profiler level
-	uint32_t _autoLevelProfiler = 0;	// Automatic change to profiler level if time between handles is greater than n millis
 
 	boolean _showTime = false;			// Show time in millis
 
@@ -348,6 +366,7 @@ private:
 	boolean _newLine = true;			// New line write ?
 
 	String _command = "";				// Command received
+	bool _commandOverflow = false;		// Overlong command was discarded
 	String _lastCommand = "";			// Last Command received
 	uint32_t _lastTimeCommand = millis();// Last time command received
 	String _helpProjectCmds = "";		// Help of comands setted by project (sketch)
@@ -356,6 +375,34 @@ private:
 
 	String _filter = "";				// Filter
 	boolean _filterActive = false;
+
+#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+    static constexpr size_t WEB_MAX_LINE_LENGTH = 1024;
+    static constexpr size_t WEB_MAX_BATCH_LENGTH = 8192;
+    static constexpr uint32_t WEB_BATCH_INTERVAL_MS = 25;
+    AsyncWebSocket* _webSocket = nullptr;
+    uint8_t _webLevel = DEBUG;
+    bool _webSilenced = false;
+    bool _webRoutePending = false;
+    bool _webRouteActive = false;
+    uint8_t _webRouteLevel = ANY;
+    uint8_t _webLineLevel = ANY;
+    bool _webLineHasLevel = false;
+    String _webLine;
+    String _webBatch;
+    uint32_t _webLastBatchSend = 0;
+    uint32_t _webLastCleanup = 0;
+    uint32_t _webDroppedLines = 0;
+    uint32_t _webDroppedBytes = 0;
+    uint32_t _webLastLogTime = 0;
+    bool _webShowLevel = true;
+    bool _webShowProfiler = true;
+    void writeWebCharacter(uint8_t character);
+    void flushWebSocketLine();
+    void sendWebBatch(bool force = false);
+    void clearWebBuffers() { _webLine = ""; _webBatch = ""; _webDroppedLines = 0; _webDroppedBytes = 0; }
+    String makeWebPrefix(uint8_t level);
+#endif
 
 	String _bufferPrint = "";			// Buffer of print write to WiFi
 
@@ -381,9 +428,6 @@ private:
 	boolean isCRLF(char character);
 	uint32_t getFreeMemory();
 
-#ifdef ALPHA_VERSION // In test, not good yet
-	void sendTelnetCommand(uint8_t command, uint8_t option);
-#endif
 
 };
 
