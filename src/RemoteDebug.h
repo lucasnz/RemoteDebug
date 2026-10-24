@@ -214,18 +214,12 @@ class RemoteDebug: public Print
 	boolean beginMessage(uint8_t debugLevel = DEBUG);
 
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
-    // Optional AsyncWebServer transport. The application owns the socket.
-    void attachWebSocket(AsyncWebSocket* socket) {
-        _webSocket = socket;
-        _webLine.reserve(WEB_MAX_LINE_LENGTH);
-        _webBatch.reserve(WEB_MAX_BATCH_LENGTH);
-    }
-    void detachWebSocket() {
-        flushWebSocketLine();
-        sendWebBatch(true);
-        _webSocket = nullptr;
-        clearWebBuffers();
-    }
+    // Optional AsyncWebServer transport. The application owns sockets passed
+    // to attachWebSocket(). beginWebSocket() creates and owns a socket and
+    // serves the library's self-contained browser console.
+    void attachWebSocket(AsyncWebSocket* socket);
+    void detachWebSocket();
+    bool beginWebSocket(AsyncWebServer* server, const char* pagePath = "/debug");
     void flush() override;
     void setWebDebugLevel(uint8_t level) { if (level <= ANY) _webLevel = level; }
     uint8_t getWebDebugLevel() const { return _webLevel; }
@@ -365,6 +359,7 @@ private:
 	static constexpr size_t WEB_MAX_BATCH_LENGTH = REMOTEDEBUG_WEB_MAX_BATCH_LENGTH;
     static constexpr uint32_t WEB_BATCH_INTERVAL_MS = 25;
     AsyncWebSocket* _webSocket = nullptr;
+    AsyncWebSocket* _ownedWebSocket = nullptr;
     uint8_t _webLevel = DEBUG;
     bool _webSilenced = false;
     bool _webRoutePending = false;
@@ -386,6 +381,9 @@ private:
     void sendWebBatch(bool force = false);
     void clearWebBuffers() { _webLine = ""; _webBatch = ""; _webDroppedLines = 0; _webDroppedBytes = 0; }
     String makeWebPrefix(uint8_t level);
+    void handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
+                              AwsEventType type, void* arg, uint8_t* data, size_t len);
+    void processWebCommand(AsyncWebSocketClient* client, String command);
 #endif
 
 	WiFiServer* _telnetServer = nullptr;

@@ -177,6 +177,11 @@ RemoteDebug::~RemoteDebug()
 	// Stop
 
 	stop();
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
+    delete _ownedWebSocket;
+    _ownedWebSocket = nullptr;
+    _webSocket = nullptr;
+#endif
 	delete _telnetServer;
 	_telnetServer = nullptr;
 }
@@ -1694,6 +1699,125 @@ String RemoteDebug::expand(const String& value)
 
 
 #if REMOTEDEBUG_ENABLE_WEBSOCKET && !defined(DEBUG_DISABLED)
+namespace
+{
+static const char REMOTEDEBUG_WEB_PAGE[] PROGMEM = R"HTML(
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 RemoteDebug</title><style>
+:root{color-scheme:dark;background:#111827;color:#e5e7eb;font:15px system-ui,sans-serif}
+body{max-width:1100px;margin:auto;padding:1rem}h1{font-size:1.35rem;margin:.2rem 0 1rem}
+.controls{display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem}
+button,select,input{font:inherit;color:inherit;background:#1f2937;border:1px solid #4b5563;border-radius:.35rem;padding:.48rem .65rem}
+button{cursor:pointer}button:hover{background:#374151}input{flex:1;min-width:12rem}
+#state{font-weight:700}.online{color:#34d399}.offline{color:#f87171}
+#log{height:68vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#030712;border:1px solid #374151;border-radius:.4rem;padding:.8rem;margin:0;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+.small{color:#9ca3af;font-size:.85rem}</style></head><body>
+<h1>ESP32 RemoteDebug</h1><div class="controls"><span id="state" class="offline">Disconnected</span>
+<label>Level <select id="level"><option>verbose</option><option selected>debug</option><option>info</option><option>warning</option><option>error</option><option>any</option></select></label>
+<button id="silence" type="button">Silence</button><button id="pause" type="button">Pause display</button><button id="clear" type="button">Clear</button></div>
+<div class="controls"><input id="command" aria-label="Command" placeholder="help or status"><button id="send" type="button">Send</button></div>
+<p class="small">The page reconnects automatically and retains the newest 2,000 lines.</p><pre id="log" role="log" aria-live="polite"></pre>
+<script>(()=>{'use strict';const state=document.querySelector('#state'),log=document.querySelector('#log'),level=document.querySelector('#level'),command=document.querySelector('#command'),pauseButton=document.querySelector('#pause');
+const maxLines=2000;let lines=[],socket,retryTimer,paused=false;
+function render(){if(paused)return;log.textContent=lines.join('\n')+(lines.length?'\n':'');log.scrollTop=log.scrollHeight}
+function append(message){lines.push(...String(message).replace(/\r/g,'').split('\n').filter(Boolean));if(lines.length>maxLines)lines=lines.slice(-maxLines);render()}
+function send(value){value=String(value||'').trim();if(!value||!socket||socket.readyState!==WebSocket.OPEN)return false;socket.send(value);return true}
+function connected(value){state.textContent=value?'Connected':'Disconnected';state.className=value?'online':'offline'}
+function connect(){clearTimeout(retryTimer);const scheme=location.protocol==='https:'?'wss:':'ws:';socket=new WebSocket(`${scheme}//${location.host}/debug/ws`);
+socket.addEventListener('open',()=>{connected(true);send(`level ${level.value}`);send('status')});socket.addEventListener('message',event=>append(event.data));
+socket.addEventListener('close',()=>{connected(false);retryTimer=setTimeout(connect,2000)});socket.addEventListener('error',()=>socket.close())}
+document.querySelector('#clear').addEventListener('click',()=>{lines=[];render()});document.querySelector('#silence').addEventListener('click',()=>send('silence'));
+level.addEventListener('change',()=>send(`level ${level.value}`));pauseButton.addEventListener('click',()=>{paused=!paused;pauseButton.textContent=paused?'Resume display':'Pause display';render()});
+function sendCommand(){if(send(command.value))command.value=''}document.querySelector('#send').addEventListener('click',sendCommand);command.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();sendCommand()}});connect()})();</script></body></html>
+)HTML";
+}
+
+void RemoteDebug::attachWebSocket(AsyncWebSocket* socket)
+{
+    if (_ownedWebSocket && socket != _ownedWebSocket) {
+        _ownedWebSocket->closeAll();
+        delete _ownedWebSocket;
+        _ownedWebSocket = nullptr;
+    }
+    _webSocket = socket;
+    _webLine.reserve(WEB_MAX_LINE_LENGTH);
+    _webBatch.reserve(WEB_MAX_BATCH_LENGTH);
+}
+
+void RemoteDebug::detachWebSocket()
+{
+    flushWebSocketLine();
+    sendWebBatch(true);
+    if (_ownedWebSocket) {
+        _ownedWebSocket->closeAll();
+        delete _ownedWebSocket;
+        _ownedWebSocket = nullptr;
+    }
+    _webSocket = nullptr;
+    clearWebBuffers();
+}
+
+bool RemoteDebug::beginWebSocket(AsyncWebServer* server, const char* pagePath)
+{
+    if (!server || !pagePath || !*pagePath || _ownedWebSocket) return false;
+    _ownedWebSocket = new AsyncWebSocket("/debug/ws");
+    if (!_ownedWebSocket) return false;
+    attachWebSocket(_ownedWebSocket);
+    _ownedWebSocket->onEvent([this](AsyncWebSocket* socket, AsyncWebSocketClient* client,
+                                    AwsEventType type, void* arg, uint8_t* data, size_t len) {
+        handleWebSocketEvent(socket, client, type, arg, data, len);
+    });
+    server->addHandler(_ownedWebSocket);
+    server->on(pagePath, HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->send_P(200, "text/html; charset=utf-8", REMOTEDEBUG_WEB_PAGE);
+    });
+    return true;
+}
+
+void RemoteDebug::handleWebSocketEvent(AsyncWebSocket*, AsyncWebSocketClient* client,
+                                       AwsEventType type, void* arg, uint8_t* data, size_t len)
+{
+    if (type == WS_EVT_CONNECT) {
+        String greeting = "Connected to "; greeting += _hostName; greeting += "; level=";
+        greeting += levelName(_webLevel); sendWebMessage(client, greeting); return;
+    }
+    if (type != WS_EVT_DATA) return;
+    AwsFrameInfo* info = static_cast<AwsFrameInfo*>(arg);
+    if (!info || !info->final || info->index != 0 || info->len != len || info->opcode != WS_TEXT) {
+        sendWebMessage(client, "Only complete text frames are supported"); return;
+    }
+    String command; command.reserve(len);
+    for (size_t i = 0; i < len; ++i) command += static_cast<char>(data[i]);
+    processWebCommand(client, command);
+}
+
+void RemoteDebug::processWebCommand(AsyncWebSocketClient* client, String command)
+{
+    command.trim(); command.toLowerCase();
+    if (command == "help" || command == "h" || command == "?") {
+        sendWebMessage(client, "Commands: help, status, silence, level verbose|debug|info|warning|error|any"); return;
+    }
+    if (command == "status") {
+        String response = "clients="; response += String(webClientCount()); response += ", level=";
+        response += levelName(_webLevel); response += ", silenced="; response += _webSilenced ? "yes" : "no";
+        sendWebMessage(client, response); return;
+    }
+    if (command == "silence" || command == "s") {
+        const bool enabled = !_webSilenced;
+        sendWebMessage(client, enabled ? "WebSocket logging silenced" : "WebSocket logging resumed");
+        setWebSilenced(enabled); return;
+    }
+    if (command.startsWith("level ")) {
+        const int parsed = parseLevel(command.substring(6));
+        if (parsed < 0) { sendWebMessage(client, "Unknown level"); return; }
+        setWebDebugLevel(static_cast<uint8_t>(parsed));
+        String response = "WebSocket level set to "; response += levelName(_webLevel);
+        sendWebMessage(client, response); return;
+    }
+    sendWebMessage(client, "Unknown command. Send 'help'.");
+}
+
 void RemoteDebug::flush()
 {
     flushWebSocketLine();
