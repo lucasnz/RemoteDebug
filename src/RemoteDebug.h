@@ -67,7 +67,7 @@
 #include "Arduino.h"
 #include "Print.h"
 
-#if defined(REMOTEDEBUG_ENABLE_WEBSOCKET) && !defined(DEBUG_DISABLED)
+#if REMOTEDEBUG_ENABLE_WEBSOCKET && !defined(DEBUG_DISABLED)
 #include <ESPAsyncWebServer.h>
 #endif
 
@@ -213,7 +213,7 @@ class RemoteDebug: public Print
 	// Captures routing state for one immediately following Print operation.
 	boolean beginMessage(uint8_t debugLevel = DEBUG);
 
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     // Optional AsyncWebServer transport. The application owns the socket.
     void attachWebSocket(AsyncWebSocket* socket) {
         _webSocket = socket;
@@ -360,7 +360,7 @@ private:
 	String _filter = "";				// Filter
 	boolean _filterActive = false;
 
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
 	static constexpr size_t WEB_MAX_LINE_LENGTH = REMOTEDEBUG_WEB_MAX_LINE_LENGTH;
 	static constexpr size_t WEB_MAX_BATCH_LENGTH = REMOTEDEBUG_WEB_MAX_BATCH_LENGTH;
     static constexpr uint32_t WEB_BATCH_INTERVAL_MS = 25;

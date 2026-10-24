@@ -196,7 +196,7 @@ void RemoteDebug::stop()
 	// Stop server
 
 	if (_telnetServer) _telnetServer->stop();
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     if (_webSocket) _webSocket->closeAll();
     clearWebBuffers();
 #endif
@@ -207,7 +207,7 @@ void RemoteDebug::stop()
 
 void RemoteDebug::handle()
 {
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     sendWebBatch();
     if (_webSocket && (uint32_t)(millis() - _webLastCleanup) >= 1000) {
         _webLastCleanup = millis();
@@ -492,7 +492,7 @@ void RemoteDebug::disconnect(boolean only_telnetClient)
 		_telnetClient.stop();
 		_connected = false;
 	}
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     if (!only_telnetClient && _webSocket) {
         _webSocket->closeAll();
         clearWebBuffers();
@@ -567,7 +567,7 @@ boolean RemoteDebug::isConnected()
 {
 
 	// Connected through either transport
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     return _connected || hasWebClients();
 #else
     return _connected;
@@ -632,7 +632,7 @@ boolean RemoteDebug::isActive(uint8_t debugLevel) const
 {
     const bool telnetActive = (debugLevel >= _clientDebugLevel && !_silence &&
                                (_connected || _serialEnabled));
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     const bool webActive = (_webSocket && hasWebClients() && 
                             !_webSilenced && !_silence && debugLevel >= _webLevel);
     return telnetActive || webActive;
@@ -645,7 +645,7 @@ boolean RemoteDebug::beginMessage(uint8_t debugLevel)
     const bool telnetActive = (debugLevel >= _clientDebugLevel && !_silence &&
                                (_connected || _serialEnabled));
     if (telnetActive) _lastDebugLevel = debugLevel;
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     _webRouteLevel = debugLevel;
     _webRouteActive = (_webSocket && hasWebClients() && !_webSilenced && !_silence && debugLevel >= _webLevel);
     _webRoutePending = telnetActive || _webRouteActive;
@@ -706,7 +706,7 @@ size_t RemoteDebug::write(uint8_t character)
 	// Connected ?
 
 	boolean connected = _connected;
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     writeWebCharacter(character);
 #endif
 
@@ -1614,7 +1614,7 @@ void RemoteDebug::silence(boolean activate, boolean showMessage)
 	// Set it
 
 	_silence = activate;
-#ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
     _webSilenced = activate;
     if (activate) clearWebBuffers();
 #endif
@@ -1693,7 +1693,7 @@ String RemoteDebug::expand(const String& value)
 /////// End
 
 
-#if defined(REMOTEDEBUG_ENABLE_WEBSOCKET) && !defined(DEBUG_DISABLED)
+#if REMOTEDEBUG_ENABLE_WEBSOCKET && !defined(DEBUG_DISABLED)
 void RemoteDebug::flush()
 {
     flushWebSocketLine();

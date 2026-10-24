@@ -1,84 +1,54 @@
 # RemoteDebug
 
-**An ESP32 remote debugging library with integrated Telnet and WebSocket transports.**
+**Remote debugging for ESP32 over Telnet and optional WebSocket transports, using one logging API.**
 
-This project is a fork of [JoaoLopesF/RemoteDebug](https://github.com/JoaoLopesF/RemoteDebug) and incorporates changes from [ktos/RemoteDebug](https://github.com/ktos/RemoteDebug). The goal of the project is to provide **one library, one logging API, and multiple transports**. The library provides Telnet and WebSocket based `RemoteDebug` support.
+This project is a fork of [JoaoLopesF/RemoteDebug](https://github.com/JoaoLopesF/RemoteDebug) and incorporates changes from [ktos/RemoteDebug](https://github.com/ktos/RemoteDebug).
 
-- **Fork:** https://github.com/lucasnz/RemoteDebug
-- **Upstream:** https://github.com/JoaoLopesF/RemoteDebug
-- **Incorporates** https://github.com/ktos/RemoteDebug
+- **This fork:** <https://github.com/lucasnz/RemoteDebug>
+- **Original upstream:** <https://github.com/JoaoLopesF/RemoteDebug>
+- **Additional source:** <https://github.com/ktos/RemoteDebug>
 
 ## Features
 
-### Integrated dual-transport debugging
-
-This fork brings together the original RemoteDebug functionality and WebSocket-based debugging.
-
-- **Telnet debugging:** Retains the familiar remote logging workflow from the upstream library.
-- **WebSocket debugging:** Adds a WebSocket transport for delivering diagnostic output to browser-based clients.
-- **Unified logging interface:** Uses the `RemoteDebug` class and existing logging macros rather than requiring a separate `WebRemoteDebug` object.
-- **Shared library:** Keeps transport integration and debugging configuration within one library.
-
-### WebSocket-specific functionality
-
-The WebSocket integration adds controls for managing browser-based debugging output, including:
-
-- Attaching and detaching a WebSocket endpoint.
-- Configuring the WebSocket debugging level independently.
-- Enabling or disabling WebSocket output.
-- Controlling the display of debugging levels and profiler information.
-- Checking whether WebSocket clients are connected and obtaining the client count.
-- Sending messages to WebSocket clients.
-- Inspecting output batching and buffer statistics.
-- Monitoring dropped WebSocket lines and bytes.
-
-The exact API is defined by the headers in the version installed. See `src/RemoteDebug.h` for the available methods.
-
-### RemoteDebug functionality
-
-The fork retains the original library's core debugging capabilities, including:
-
-- Multiple logging levels:
-  - `PROFILER`
-  - `VERBOSE`
-  - `DEBUG`
-  - `INFO`
-  - `WARNING`
-  - `ERROR`
-  - `ANY`
-- Logging through the familiar `debugV()`, `debugD()`, `debugI()`, `debugW()`, and `debugE()` macros.
-- Remote debugging session management.
-- Optional password configuration.
-- Configurable output colours and timestamps.
-- Debug-level display.
-- Profiler support and automatic profiler-level adjustment.
+- ESP32 support using the Arduino framework.
+- Telnet logging on a configurable runtime port.
+- Optional `ESPAsyncWebServer` WebSocket output.
+- Independent Telnet and WebSocket debug levels.
+- Standard `debugV()`, `debugD()`, `debugI()`, `debugW()`, `debugE()`, and `debugA()` logging macros.
+- Optional timestamps, colours, profiler timing, filters, and Serial mirroring.
 - Project-specific commands, command help, and callbacks.
-- Optional reset commands.
-- New-client and debugger callbacks.
-- Optional serial output.
-
-Refer to the source and examples for the precise behaviour and supported configuration options.
+- Optional password prompt with Telnet echo suppression.
+- Bounded Telnet command input and WebSocket output buffers.
+- Compile-time removal through `DEBUG_DISABLED`.
 
 ## Platform and dependencies
 
-This fork is intended for ESP32 projects using the Arduino framework.
+RemoteDebug targets **ESP32 only**. Compilation intentionally fails on unsupported targets.
 
-### Requirements
+### Telnet-only requirements
 
-- An ESP32-compatible Arduino environment.
-- A compatible `ESPAsyncWebServer` installation for WebSocket support.
-- The asynchronous TCP dependency required by the selected web-server version.
-- A network connection for remote debugging.
+- ESP32 Arduino framework
+- Wi-Fi connectivity
 
-The WebSocket transport depends on the asynchronous web-server stack. Ensure the versions of the ESP32 Arduino core, `ESPAsyncWebServer`, and its dependencies are compatible with one another.
+### Additional WebSocket requirements
 
-The original upstream library supported additional environments. Do not assume ESP8266 compatibility with this fork unless it has been explicitly tested for the revision you are using.
+- A compatible `ESPAsyncWebServer` installation
+- The asynchronous TCP dependency required by that server version
+
+WebSocket dependencies are only required when WebSocket support is enabled.
 
 ## Installation
 
 ### PlatformIO
 
-Add the fork to your project's `platformio.ini` dependencies:
+Add the library to `platformio.ini`:
+
+```ini
+lib_deps =
+    https://github.com/lucasnz/RemoteDebug.git
+```
+
+For WebSocket support, also add a compatible asynchronous web server:
 
 ```ini
 lib_deps =
@@ -86,21 +56,123 @@ lib_deps =
     ESP32Async/ESPAsyncWebServer
 ```
 
-Check the dependency requirements for your selected `ESPAsyncWebServer` release and add any required asynchronous TCP dependency if it is not installed automatically.
-
-If your project already uses `ESPAsyncWebServer`, avoid introducing conflicting versions of the same dependency.
+Avoid installing conflicting versions of `ESPAsyncWebServer` or its asynchronous TCP dependency.
 
 ### Arduino IDE
 
 1. Download or clone this repository.
-2. Install the library in your Arduino libraries directory.
-3. Install a compatible `ESPAsyncWebServer` dependency and its required dependencies.
-4. Include `RemoteDebug.h` in your sketch.
-5. Configure the debugging transports required by your application.
+2. Install it in the Arduino libraries directory.
+3. If WebSocket support is required, install a compatible `ESPAsyncWebServer` and its dependencies.
+4. Include `RemoteDebug.h` in the sketch.
 
-## Basic usage
+## Basic Telnet usage
 
-The following illustrates the general integration pattern. Adapt the Wi-Fi setup, WebSocket registration, and method calls to the API available in your checked-out revision.
+```cpp
+#include <WiFi.h>
+#include <RemoteDebug.h>
+
+RemoteDebug Debug;
+
+void setup()
+{
+    Serial.begin(115200);
+
+    // Connect Wi-Fi before starting RemoteDebug.
+    // WiFi.begin(...);
+
+    Debug.begin("my-device");
+    debugI("RemoteDebug started");
+}
+
+void loop()
+{
+    Debug.handle();
+    debugD("Example debug message");
+}
+```
+
+Call `Debug.handle()` regularly. It accepts Telnet connections, processes commands, handles timeouts, flushes buffered output, and services the optional WebSocket transport.
+
+### Selecting the Telnet port and initial level
+
+The default overload uses `TELNET_PORT` and starts at `DEBUG` level:
+
+```cpp
+Debug.begin("my-device");
+```
+
+Select an initial level:
+
+```cpp
+Debug.begin("my-device", RemoteDebug::INFO);
+```
+
+Select both a runtime port and initial level:
+
+```cpp
+Debug.begin("my-device", 2323, RemoteDebug::INFO);
+```
+
+`begin()` returns `false` if the port is zero, the level is invalid, or the server cannot be created.
+
+## Logging
+
+```cpp
+debugV("Verbose message");
+debugD("Debug message");
+debugI("Informational message");
+debugW("Warning message");
+debugE("Error message");
+debugA("Always visible at any configured level");
+```
+
+Available levels, from most to least verbose, are:
+
+1. `VERBOSE`
+2. `DEBUG`
+3. `INFO`
+4. `WARNING`
+5. `ERROR`
+6. `ANY`
+
+The logging macros include the current function name and ESP32 core ID unless automatic function prefixes are disabled.
+
+The library is designed for a single application task. Do not call `handle()`, logging macros, or direct `Print` methods concurrently from multiple tasks without providing external serialisation.
+
+## Telnet commands
+
+The main built-in commands are:
+
+- `?` or `h`: show command help
+- `q`: close the Telnet session
+- `m`: show free heap
+- `v`, `d`, `i`, `w`, `e`: select the Telnet debug level
+- `s`: toggle silence
+- `l`: toggle level labels
+- `t`: toggle timestamps
+- `p`: toggle elapsed-time profiler display
+- `c`: toggle ANSI colours
+- `filter <text>`: show matching output
+- `nofilter`: clear the filter
+- `reset`: restart the ESP32 when explicitly enabled with `setResetCmdEnabled(true)`
+
+## Password protection
+
+Configure a Telnet password before accepting clients:
+
+```cpp
+Debug.setPassword("change-me");
+```
+
+When `REMOTEDEBUG_HIDE_PASSWORD` is enabled, the library uses Telnet ECHO negotiation to ask a compliant client to suppress local echo while the password is entered. Normal echo is restored after authentication or disconnection.
+
+This only hides the password on screen. **Telnet remains unencrypted**, so the password and all debug traffic can still be observed on the network.
+
+Failed password attempts use a global increasing delay. The retry limit and base backoff are configurable.
+
+## WebSocket usage
+
+WebSocket support must be enabled at compile time. The application owns the `AsyncWebSocket`, web server, authentication, authorisation, and TLS configuration.
 
 ```cpp
 #include <WiFi.h>
@@ -109,122 +181,156 @@ The following illustrates the general integration pattern. Adapt the Wi-Fi setup
 
 AsyncWebServer server(80);
 AsyncWebSocket debugSocket("/debug");
-
 RemoteDebug Debug;
 
-void setup() {
-  Serial.begin(115200);
+void setup()
+{
+    Serial.begin(115200);
 
-  // Connect to Wi-Fi before starting remote debugging.
-  // Configure WiFi.begin(...) and wait for the connection.
+    // Connect Wi-Fi before starting the server and RemoteDebug.
 
-  Debug.begin("my-device", RemoteDebug::DEBUG);
+    Debug.begin("my-device", RemoteDebug::DEBUG);
 
-  // Register the WebSocket endpoint with the web server.
-  server.addHandler(&debugSocket);
-  server.begin();
+    server.addHandler(&debugSocket);
+    server.begin();
 
-  // Attach the WebSocket transport to RemoteDebug.
-  Debug.attachWebSocket(&debugSocket);
+    Debug.attachWebSocket(&debugSocket);
 
-  Debug.setResetCmdEnabled(true);
+    // Only do this after the application has authenticated and authorised
+    // access to the WebSocket endpoint.
+    Debug.setWebAccessAuthorized(true);
 
-  debugI("RemoteDebug started");
+    Debug.setWebDebugLevel(RemoteDebug::INFO);
+    debugI("WebSocket debugging started");
 }
 
-void loop() {
-  // Service the RemoteDebug library regularly.
-  Debug.handle();
-
-  debugD("Example debug message");
+void loop()
+{
+    Debug.handle();
 }
 ```
 
-This example demonstrates the intended arrangement of the components; it is not a substitute for checking the exact method signatures in `src/RemoteDebug.h`. The application must also provide a compatible WebSocket client if it needs to display the output in a browser.
+Useful WebSocket methods include:
 
-### Logging messages
+- `attachWebSocket()` and `detachWebSocket()`
+- `setWebDebugLevel()` and `getWebDebugLevel()`
+- `setWebSilenced()` and `isWebSilenced()`
+- `showWebDebugLevel()` and `showWebProfiler()`
+- `webClientCount()` and `hasWebClients()`
+- `sendWebMessage()`
+- `webBatchLength()` and `webBatchCapacity()`
+- `droppedWebLines()` and `droppedWebBytes()`
+- `flush()`
 
-Use the standard RemoteDebug logging macros:
+## Compile-time configuration
 
-```cpp
-debugV("Verbose message");
-debugD("Debug message");
-debugI("Informational message");
-debugW("Warning message");
-debugE("Error message");
+Settings can be supplied as build flags or changed in `RemoteDebugCfg.h`. Prefer build flags for project-specific values so library updates do not overwrite local configuration.
+
+### Example PlatformIO configuration
+
+```ini
+build_flags =
+    -D REMOTEDEBUG_ENABLE_WEBSOCKET=1
+    -D REMOTEDEBUG_WEB_MAX_LINE_LENGTH=512
+    -D REMOTEDEBUG_WEB_MAX_BATCH_LENGTH=16384
+    -D REMOTEDEBUG_MAX_COMMAND_LENGTH=256
+    -D REMOTEDEBUG_PWD_ATTEMPTS=3
+    -D REMOTEDEBUG_AUTH_BACKOFF_MS=1000UL
+    -D REMOTEDEBUG_HIDE_PASSWORD=1
+    -D REMOTEDEBUG_MAX_TIME_INACTIVE_MS=600000UL
+    -D REMOTEDEBUG_PRINT_BUFFER_SIZE=256
+    -D REMOTEDEBUG_SHOW_HELP=true
+    -D REMOTEDEBUG_CLIENT_BUFFERING=true
 ```
 
-Call `Debug.handle()` regularly from the Arduino `loop()` so the library can perform its normal processing.
+### Configuration reference
 
-## Examples
+| Variable | Default | Purpose |
+|---|---:|---|
+| `DEBUG_DISABLED` | Undefined | Compiles out the `RemoteDebug` class implementation and turns logging macros into no-ops. Define it for production builds that do not require remote debugging. |
+| `REMOTEDEBUG_ENABLE_WEBSOCKET` | `0` | Enables optional `ESPAsyncWebServer` WebSocket support when set to `1`. See the conditional-compilation note below. |
+| `REMOTEDEBUG_WEB_MAX_LINE_LENGTH` | `1024` | Maximum WebSocket line length in bytes before the current line is flushed. |
+| `REMOTEDEBUG_WEB_MAX_BATCH_LENGTH` | `8192` | Maximum accumulated WebSocket batch length in bytes. Additional complete lines are dropped and counted when the batch is full. |
+| `TELNET_PORT` | `23` | Default port used by `begin(hostName)` and `begin(hostName, level)`. A different port can be passed directly to `begin(hostName, port, level)`. |
+| `REMOTEDEBUG_MAX_COMMAND_LENGTH` | `128` | Maximum accepted printable Telnet command length. Extra characters are discarded until the line terminator. |
+| `DEBUG_DISABLE_AUTO_FUNC` | Undefined | Removes the automatic function-name and ESP32 core prefix from logging macros. |
+| `REMOTEDEBUG_PWD_ATTEMPTS` | `3` | Number of incorrect password attempts permitted before the Telnet client is disconnected. |
+| `REMOTEDEBUG_AUTH_BACKOFF_MS` | `1000UL` | Base duration for increasing authentication backoff after failed password attempts. |
+| `REMOTEDEBUG_HIDE_PASSWORD` | `1` | Uses Telnet ECHO negotiation to suppress local password display in compliant clients. This does not encrypt the password. Set to `0` to disable negotiation. |
+| `REMOTEDEBUG_MAX_TIME_INACTIVE_MS` | `600000UL` | Normal Telnet inactivity timeout in milliseconds. The default is 10 minutes. Set to `0` to disable the normal inactivity timeout. |
+| `MAX_TIME_INACTIVE` | Alias | Backward-compatible alias for `REMOTEDEBUG_MAX_TIME_INACTIVE_MS`. Prefer the prefixed variable in new projects. |
+| `REMOTEDEBUG_PRINT_BUFFER_SIZE` | `150U` | Telnet/Serial line-buffer flush threshold in bytes. Long output is flushed when the threshold is reached. |
+| `BUFFER_PRINT` | Alias | Backward-compatible alias for `REMOTEDEBUG_PRINT_BUFFER_SIZE`. Prefer the prefixed variable in new projects. |
+| `REMOTEDEBUG_SHOW_HELP` | `true` | Shows the initial Telnet help text after connection and successful authentication. |
+| `SHOW_HELP` | Alias | Backward-compatible alias for `REMOTEDEBUG_SHOW_HELP`. Prefer the prefixed variable in new projects. |
+| `REMOTEDEBUG_CLIENT_BUFFERING` | `true` | Buffers Telnet output to reduce the overhead and latency effects of frequent small writes. |
+| `CLIENT_BUFFERING` | Derived alias | Defined for backward compatibility when `REMOTEDEBUG_CLIENT_BUFFERING` is enabled. |
+| `DELAY_TO_SEND` | `10` | Telnet output-buffer send interval in milliseconds when client buffering is enabled. |
+| `MAX_SIZE_SEND` | `1460` | Maximum buffered Telnet send size in bytes. The default aligns with a typical TCP maximum segment payload. |
+| `DEBUGGER_ENABLED` | `true` | Compiles callback-based debugger integration. In the current configuration file this is defined unconditionally; disable it by editing the file or making the definition conditional. |
+| `DEBUGGER_HANDLE_TIME` | `850` | Minimum interval in milliseconds between scheduled debugger callback handling. |
+| `DEBUGGER_SEND_INFO` | Undefined | Reserved optional debugger-information support. It is currently commented out and the configuration notes indicate the app does not yet expose it. |
 
-See the `examples/` directory for usage patterns included in the repository.
+## Buffering and delivery
 
-| Example | Purpose |
-| --- | --- |
-| `RemoteDebug_Basic` | Basic setup and remote logging. |
-| `RemoteDebug_Advanced` | Advanced configuration, commands, and profiler functionality. |
-| `RemoteDebug_Debugger` | Debugger and command integration. |
-| `DualTransport` | Demonstrates integration of the WebSocket transport alongside the original debugging transport. |
-
-Example availability and implementation details may vary between revisions. Check each example's comments and the library header before relying on a particular method or behaviour.
-
-## Buffering and output delivery
-
-WebSocket output may be buffered or batched to reduce the overhead of sending frequent log messages.
-
-The library exposes diagnostics for inspecting WebSocket buffering and dropped output. These are useful when investigating missing messages or a slow browser client.
-
-Keep in mind:
+Telnet buffering and WebSocket batching reduce the number of network writes, but debug output is not a guaranteed-delivery channel.
 
 - Buffer capacity is finite.
-- A slow or disconnected client may not receive every message.
-- Dropped-output counters indicate that output has been lost; they do not recover missing messages.
-- Debugging output should not be used as a guaranteed-delivery messaging mechanism.
+- Slow clients can cause WebSocket lines or bytes to be dropped.
+- Dropped-output counters report loss but cannot recover missing output.
+- Avoid using debug output for application messaging or audit records.
 
-If you need to diagnose output loss, monitor the available batch, buffer, and dropped-output statistics in your version of the library.
+Monitor `droppedWebLines()` and `droppedWebBytes()` when diagnosing missing WebSocket output.
 
 ## Security considerations
 
-Remote debugging can expose internal application state and, depending on the configuration, debugging commands.
-
-- Use remote debugging only on a trusted network or behind a VPN.
-- Do not expose debugging endpoints directly to the public internet.
-- Use network firewall rules to restrict access.
-- Treat Telnet as an unencrypted transport, even when password protection is enabled.
-- Avoid logging passwords, tokens, or other sensitive information.
-
-A password alone does not make an unencrypted debugging connection secure.
+- Treat Telnet as plaintext even when a password is configured and hidden on screen.
+- Use remote debugging only on a trusted management network or through a VPN.
+- Restrict access with firewall rules.
+- Do not expose Telnet or WebSocket debugging directly to the public internet.
+- Do not log passwords, tokens, private keys, personal information, or other sensitive content.
+- Compile production firmware with `DEBUG_DISABLED` unless remote diagnostics are explicitly required and risk-assessed.
 
 ## Compatibility and troubleshooting
 
-If the library does not compile or the WebSocket transport does not behave as expected, check the following:
+- Confirm that the installed library is this fork rather than another library with the same name.
+- Confirm that the project targets ESP32.
+- Call `Debug.handle()` regularly.
+- If a custom Telnet port is used, confirm that firewall rules and the client use that port.
+- If password characters remain visible, confirm that `REMOTEDEBUG_HIDE_PASSWORD` is enabled and that the Telnet client supports ECHO negotiation.
+- If WebSocket code compiles unexpectedly, review the conditional-compilation note above.
+- For WebSocket output, confirm that the endpoint is registered, attached, and explicitly authorised.
+- Ensure the ESP32 Arduino core, `ESPAsyncWebServer`, and asynchronous TCP dependency are mutually compatible.
+- Test Telnet and WebSocket independently before testing both together.
+- Perform a clean rebuild after changing public method signatures or compile-time settings.
 
-1. Confirm that the installed library is this fork, rather than another copy of `RemoteDebug`.
-2. Check that the ESP32 Arduino core and asynchronous web-server dependencies are compatible.
-3. Confirm that the WebSocket endpoint is registered with the web server.
-4. Confirm that the WebSocket transport is attached using the method supported by the installed revision.
-5. Ensure `Debug.handle()` is called regularly.
-6. Check that the browser client connects to the configured WebSocket path.
-7. Inspect the compiler output for API differences between examples and the installed source.
-8. Test Telnet and WebSocket output separately before testing them together.
+## Examples
 
-For reproducible results, build the examples against the exact versions of the library and dependencies used by your application.
+Examples may vary between revisions. Check the source under `examples/` and compare it with the installed `RemoteDebug.h`.
+
+Common example names include:
+
+- `RemoteDebug_Basic`: basic setup and logging
+- `RemoteDebug_Advanced`: commands, filters, display options, and profiler behaviour
+- `RemoteDebug_Debugger`: debugger callback integration
+- `DualTransport`: Telnet and WebSocket integration
 
 ## Contributing and issues
 
-Issues and contributions specific to this fork should be submitted through: [github.com/lucasnz/RemoteDebug](https://github.com/lucasnz/RemoteDebug)
+Submit issues and changes specific to this fork at:
 
-When reporting an issue, include:
+<https://github.com/lucasnz/RemoteDebug>
 
-- The board and ESP32 Arduino core version.
-- The library revision or commit.
-- The versions of `ESPAsyncWebServer` and its dependencies.
-- A minimal example that reproduces the issue.
-- Relevant compiler output or debugging logs.
+Include:
 
-## Upstream project
+- Board model and ESP32 Arduino core version
+- Library revision or commit
+- `ESPAsyncWebServer` and asynchronous TCP dependency versions, if applicable
+- Relevant compile-time flags
+- A minimal reproducer
+- Compiler output or diagnostic logs
 
-This project is derived from: [ktos/RemoteDebug](https://github.com/ktos/RemoteDebug), which builds on [JoaoLopesF/RemoteDebug]((https://github.com/JoaoLopesF/RemoteDebug)
+## Upstream projects
 
-Please refer to the upstream repository for the history and original implementation of RemoteDebug. Changes and extensions specific to this fork are maintained in: [lucasnz/RemoteDebug](https://github.com/lucasnz/RemoteDebug)
+- <https://github.com/JoaoLopesF/RemoteDebug>
+- <https://github.com/ktos/RemoteDebug>

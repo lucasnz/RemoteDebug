@@ -18,7 +18,9 @@
 // Optional AsyncWebServer WebSocket output transport. Define this before
 // Define in platformio.ini build flags to enable:
 // -D REMOTEDEBUG_ENABLE_WEBSOCKET=1
-//#define REMOTEDEBUG_ENABLE_WEBSOCKET
+#ifndef REMOTEDEBUG_ENABLE_WEBSOCKET
+#define REMOTEDEBUG_ENABLE_WEBSOCKET 0
+#endif
 
 // Override these in platformio.ini build flags:
 // -D REMOTEDEBUG_WEB_MAX_LINE_LENGTH=512
@@ -36,7 +38,9 @@
 #define TELNET_PORT 23
 
 // Maximum accepted Telnet command length (overlong commands are discarded).
+#ifndef REMOTEDEBUG_MAX_COMMAND_LENGTH
 #define REMOTEDEBUG_MAX_COMMAND_LENGTH 128
+#endif
 
 // Disable auto function for debug macros? (uncomment this if not want this)
 //#define DEBUG_DISABLE_AUTO_FUNC true
