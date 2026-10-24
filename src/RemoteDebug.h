@@ -214,18 +214,10 @@ class RemoteDebug: public Print
 	boolean beginMessage(uint8_t debugLevel = DEBUG);
 
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
-    // Optional AsyncWebServer transport. The application owns the socket.
-    void attachWebSocket(AsyncWebSocket* socket) {
-        _webSocket = socket;
-        _webLine.reserve(WEB_MAX_LINE_LENGTH);
-        _webBatch.reserve(WEB_MAX_BATCH_LENGTH);
-    }
-    void detachWebSocket() {
-        flushWebSocketLine();
-        sendWebBatch(true);
-        _webSocket = nullptr;
-        clearWebBuffers();
-    }
+    // Creates the WebSocket endpoint and serves the self-contained browser console.
+    // The library owns the socket; the application continues to own the server.
+    bool beginWebSocket(AsyncWebServer* server, const String& hostName,
+                        const char* pagePath = "/debug");
     void flush() override;
     void setWebDebugLevel(uint8_t level) { if (level <= ANY) _webLevel = level; }
     uint8_t getWebDebugLevel() const { return _webLevel; }
@@ -380,12 +372,20 @@ private:
     uint32_t _webDroppedBytes = 0;
     uint32_t _webLastLogTime = 0;
     bool _webShowLevel = true;
+    bool _webShowTime = false;
     bool _webShowProfiler = true;
+    String _webFilter;
+    bool _webFilterActive = false;
     void writeWebCharacter(uint8_t character);
     void flushWebSocketLine();
     void sendWebBatch(bool force = false);
     void clearWebBuffers() { _webLine = ""; _webBatch = ""; _webDroppedLines = 0; _webDroppedBytes = 0; }
     String makeWebPrefix(uint8_t level);
+    void handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
+                              AwsEventType type, void* arg, uint8_t* data, size_t len);
+    void processWebCommand(AsyncWebSocketClient* client, String command);
+    String makeWebHelp() const;
+    void sendWebWelcome(AsyncWebSocketClient* client);
 #endif
 
 	WiFiServer* _telnetServer = nullptr;

@@ -177,6 +177,10 @@ RemoteDebug::~RemoteDebug()
 	// Stop
 
 	stop();
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
+    delete _webSocket;
+    _webSocket = nullptr;
+#endif
 	delete _telnetServer;
 	_telnetServer = nullptr;
 }
@@ -1694,6 +1698,164 @@ String RemoteDebug::expand(const String& value)
 
 
 #if REMOTEDEBUG_ENABLE_WEBSOCKET && !defined(DEBUG_DISABLED)
+namespace
+{
+static const char REMOTEDEBUG_WEB_PAGE[] PROGMEM = R"HTML(
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 RemoteDebug</title><style>
+:root{color-scheme:dark;background:#111827;color:#e5e7eb;font:15px system-ui,sans-serif}
+body{max-width:1100px;margin:auto;padding:1rem}h1{font-size:1.35rem;margin:.2rem 0 1rem}
+.controls{display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem}
+button,select,input{font:inherit;color:inherit;background:#1f2937;border:1px solid #4b5563;border-radius:.35rem;padding:.48rem .65rem}
+button{cursor:pointer}button:hover{background:#374151}input{flex:1;min-width:12rem}
+#state{font-weight:700}.online{color:#34d399}.offline{color:#f87171}
+#log{height:68vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#030712;border:1px solid #374151;border-radius:.4rem;padding:.8rem;margin:0;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+.small{color:#9ca3af;font-size:.85rem}</style></head><body>
+<h1>ESP32 RemoteDebug</h1><div class="controls"><span id="state" class="offline">Disconnected</span>
+<label>Level <select id="level"><option>verbose</option><option selected>debug</option><option>info</option><option>warning</option><option>error</option><option>any</option></select></label>
+<button id="silence" type="button">Silence</button><button id="pause" type="button">Pause display</button><button id="clear" type="button">Clear</button></div>
+<div class="controls"><input id="command" aria-label="Command" placeholder="help or status"><button id="send" type="button">Send</button></div>
+<p class="small">The page reconnects automatically and retains the newest 2,000 lines.</p><pre id="log" role="log" aria-live="polite"></pre>
+<script>(()=>{'use strict';const state=document.querySelector('#state'),log=document.querySelector('#log'),level=document.querySelector('#level'),command=document.querySelector('#command'),pauseButton=document.querySelector('#pause');
+const maxLines=2000;let lines=[],socket,retryTimer,paused=false;
+function render(){if(paused)return;log.textContent=lines.join('\n')+(lines.length?'\n':'');log.scrollTop=log.scrollHeight}
+function append(message){lines.push(...String(message).replace(/\r/g,'').split('\n').filter(Boolean));if(lines.length>maxLines)lines=lines.slice(-maxLines);render()}
+function send(value){value=String(value||'').trim();if(!value||!socket||socket.readyState!==WebSocket.OPEN)return false;socket.send(value);return true}
+function connected(value){state.textContent=value?'Connected':'Disconnected';state.className=value?'online':'offline'}
+function connect(){clearTimeout(retryTimer);const scheme=location.protocol==='https:'?'wss:':'ws:';socket=new WebSocket(`${scheme}//${location.host}/debug/ws`);
+socket.addEventListener('open',()=>{connected(true);send(level.value.charAt(0))});socket.addEventListener('message',event=>append(event.data));
+socket.addEventListener('close',()=>{connected(false);retryTimer=setTimeout(connect,2000)});socket.addEventListener('error',()=>socket.close())}
+document.querySelector('#clear').addEventListener('click',()=>{lines=[];render()});document.querySelector('#silence').addEventListener('click',()=>send('s'));
+level.addEventListener('change',()=>send(level.value.charAt(0)));pauseButton.addEventListener('click',()=>{paused=!paused;pauseButton.textContent=paused?'Resume display':'Pause display';render()});
+function sendCommand(){if(send(command.value))command.value=''}document.querySelector('#send').addEventListener('click',sendCommand);command.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();sendCommand()}});connect()})();</script></body></html>
+)HTML";
+}
+
+bool RemoteDebug::beginWebSocket(AsyncWebServer* server, const String& hostName,
+                                 const char* pagePath)
+{
+    if (!server || !pagePath || !*pagePath || _webSocket) return false;
+	if (!hostName.isEmpty()) _hostName = hostName;
+    _webSocket = new AsyncWebSocket("/debug/ws");
+    if (!_webSocket) return false;
+    _webLine.reserve(WEB_MAX_LINE_LENGTH);
+    _webBatch.reserve(WEB_MAX_BATCH_LENGTH);
+    _webSocket->onEvent([this](AsyncWebSocket* socket, AsyncWebSocketClient* client,
+                               AwsEventType type, void* arg, uint8_t* data, size_t len) {
+        handleWebSocketEvent(socket, client, type, arg, data, len);
+    });
+    server->addHandler(_webSocket);
+    server->on(pagePath, HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->send(200, "text/html; charset=utf-8", REMOTEDEBUG_WEB_PAGE);
+    });
+    return true;
+}
+
+String RemoteDebug::makeWebHelp() const
+{
+    String help;
+    help.reserve(1024);
+    help += "*** Remote debug - over WebSockets - for ESP32 - version "; help += VERSION;
+    help += "\n* Host name: "; help += _hostName;
+    help += " IP:"; help += WiFi.localIP().toString();
+    help += " Mac address:"; help += WiFi.macAddress();
+    help += "\n* Free Heap RAM: "; help += String(ESP.getFreeHeap());
+    help += "\n* ESP SDK version: "; help += ESP.getSdkVersion();
+    help += "\n************************************************************\n* Commands:\n";
+    help += "    ? or help -> display this help of commands\n";
+    help += "    q -> quit (close this connection)\n";
+    help += "    m -> display memory available\n";
+    help += "    v -> set debug level to verbose\n";
+    help += "    d -> set debug level to debug\n";
+    help += "    i -> set debug level to info\n";
+    help += "    w -> set debug level to warning\n";
+    help += "    e -> set debug level to errors\n";
+    help += "    s -> set debug silence on/off\n";
+    help += "    l -> show debug level\n";
+    help += "    t -> show time (millis)\n";
+    help += "    p -> show time between actual and last message (in millis)\n";
+    help += "    filter <string> -> show only debugs with this\n";
+    help += "    nofilter -> disable the filter\n";
+    if (_resetCommandEnabled) help += "    reset -> reset the ESP32\n";
+    if (!_helpProjectCmds.isEmpty() && _callbackProjectCmds) {
+        help += "\n    * Project commands:\n    ";
+        String projectHelp = _helpProjectCmds; projectHelp.replace("\n", "\n    ");
+        help += projectHelp; help += '\n';
+    }
+    help += "\n* Please type the command and press enter to execute. (? or h for this help)\n***";
+    return help;
+}
+
+void RemoteDebug::sendWebWelcome(AsyncWebSocketClient* client)
+{
+#if SHOW_HELP
+    sendWebMessage(client, makeWebHelp());
+#else
+    String greeting = "Connected to "; greeting += _hostName; greeting += "; level=";
+    greeting += levelName(_webLevel); sendWebMessage(client, greeting);
+#endif
+}
+
+void RemoteDebug::handleWebSocketEvent(AsyncWebSocket*, AsyncWebSocketClient* client,
+                                       AwsEventType type, void* arg, uint8_t* data, size_t len)
+{
+    if (type == WS_EVT_CONNECT) {
+        sendWebWelcome(client);
+        if (_callbackNewClient) _callbackNewClient();
+        return;
+    }
+    if (type != WS_EVT_DATA) return;
+    AwsFrameInfo* info = static_cast<AwsFrameInfo*>(arg);
+    if (!info || !info->final || info->index != 0 || info->len != len || info->opcode != WS_TEXT) {
+        sendWebMessage(client, "Only complete text frames are supported"); return;
+    }
+    if (len > REMOTEDEBUG_MAX_COMMAND_LENGTH) {
+        sendWebMessage(client, "* Command too long; discarded"); return;
+    }
+    String command; command.reserve(len);
+    for (size_t i = 0; i < len; ++i) command += static_cast<char>(data[i]);
+    processWebCommand(client, command);
+}
+
+void RemoteDebug::processWebCommand(AsyncWebSocketClient* client, String command)
+{
+    command.trim(); String lowered = command; lowered.toLowerCase();
+    if (lowered != "s" && _webSilenced) _webSilenced = false;
+    if (lowered == "h" || lowered == "?" || lowered == "help") {
+        sendWebMessage(client, makeWebHelp());
+    } else if (lowered == "q") {
+        sendWebMessage(client, "* Closing client connection ..."); client->close();
+    } else if (lowered == "m") {
+        String response = "* Free Heap RAM: "; response += String(ESP.getFreeHeap()); sendWebMessage(client, response);
+    } else if (lowered == "v" || lowered == "d" || lowered == "i" || lowered == "w" || lowered == "e") {
+        setWebDebugLevel(static_cast<uint8_t>(parseLevel(lowered)));
+        String response = "* Debug level set to "; response += levelName(_webLevel); sendWebMessage(client, response);
+    } else if (lowered == "s") {
+        const bool enabled = !_webSilenced;
+        sendWebMessage(client, enabled ? "* Debug now is in silent mode!" : "* Debug now exit from silent mode!");
+        setWebSilenced(enabled);
+    } else if (lowered == "l") {
+        _webShowLevel = !_webShowLevel; sendWebMessage(client, _webShowLevel ? "* Show debug level: On" : "* Show debug level: Off");
+    } else if (lowered == "t") {
+        _webShowTime = !_webShowTime; sendWebMessage(client, _webShowTime ? "* Show time: On" : "* Show time: Off");
+    } else if (lowered == "p") {
+        _webShowProfiler = !_webShowProfiler; if (_webShowProfiler) _webLastLogTime = millis();
+        sendWebMessage(client, _webShowProfiler ? "* Show profiler: On" : "* Show profiler: Off");
+    } else if (lowered.startsWith("filter ") && command.length() > 7) {
+        _webFilter = command.substring(7); _webFilter.toLowerCase(); _webFilterActive = true;
+        String response = "* Debug: Filter active: "; response += _webFilter; sendWebMessage(client, response);
+    } else if (lowered == "nofilter") {
+        _webFilter = ""; _webFilterActive = false; sendWebMessage(client, "* Debug: Filter disabled");
+    } else if (lowered == "reset" && _resetCommandEnabled) {
+        sendWebMessage(client, "* Resetting the ESP32 ..."); delay(100); ESP.restart();
+    } else {
+        _lastCommand = command;
+        if (_callbackProjectCmds) _callbackProjectCmds();
+        else sendWebMessage(client, "* Unknown command. Send '?' for help.");
+    }
+}
+
 void RemoteDebug::flush()
 {
     flushWebSocketLine();
@@ -1732,8 +1894,14 @@ void RemoteDebug::writeWebCharacter(uint8_t character)
 void RemoteDebug::flushWebSocketLine()
 {
     if (_webLine.isEmpty()) { _webLineHasLevel = false; return; }
+    if (_webFilterActive) {
+        String comparable = _webLine; comparable.toLowerCase();
+        if (comparable.indexOf(_webFilter) < 0) {
+            _webLine = ""; _webLineHasLevel = false; return;
+        }
+    }
     String line;
-    line.reserve(_webLine.length() + 32);
+    line.reserve(_webLine.length() + 48);
     line = makeWebPrefix(_webLineLevel);
     line += _webLine;
     size_t needed = line.length() + 1;
@@ -1768,7 +1936,7 @@ void RemoteDebug::sendWebBatch(bool force)
 
 String RemoteDebug::makeWebPrefix(uint8_t level)
 {
-    if (!_webShowLevel && !_webShowProfiler) return "";
+    if (!_webShowLevel && !_webShowTime && !_webShowProfiler) return "";
     String prefix = "(";
     if (_webShowLevel) {
         switch (level) {
@@ -1781,8 +1949,12 @@ String RemoteDebug::makeWebPrefix(uint8_t level)
             default: prefix += 'A'; break;
         }
     }
-    if (_webShowLevel && _webShowProfiler) prefix += ' ';
+    if (_webShowTime) {
+        if (prefix.length() > 1) prefix += ' ';
+        prefix += "t:"; prefix += String(millis()); prefix += "ms";
+    }
     if (_webShowProfiler) {
+        if (prefix.length() > 1) prefix += ' ';
         uint32_t now = millis();
         uint32_t elapsed = _webLastLogTime ? (uint32_t)(now - _webLastLogTime) : 0;
         _webLastLogTime = now;
