@@ -49,25 +49,50 @@
 // Such now as RemoteDebug now is not for production releases,
 // this kind of authentication will not be done now.
 // Can be by project, just call setPassword method
+#ifndef REMOTEDEBUG_PWD_ATTEMPTS
 #define REMOTEDEBUG_PWD_ATTEMPTS 3
+#endif
+#ifndef REMOTEDEBUG_AUTH_BACKOFF_MS
+#define REMOTEDEBUG_AUTH_BACKOFF_MS 1000UL
+#endif
 
 // Maximum time for inactivity (em milliseconds)
 // Default: 10 minutes
 // Comment it if you not want this
 // Can be by project, just define it before include this file
-#define MAX_TIME_INACTIVE 600000
+#ifndef REMOTEDEBUG_MAX_TIME_INACTIVE_MS
+#define REMOTEDEBUG_MAX_TIME_INACTIVE_MS 600000UL
+#endif
+#ifndef MAX_TIME_INACTIVE
+#define MAX_TIME_INACTIVE REMOTEDEBUG_MAX_TIME_INACTIVE_MS // backwards compatibility
+#endif
 
 // Buffered print write to WiFi -> length of buffer
 // Can be by project, just define it before include this file
-#define BUFFER_PRINT 150
+#ifndef REMOTEDEBUG_PRINT_BUFFER_SIZE
+#define REMOTEDEBUG_PRINT_BUFFER_SIZE 150U
+#endif
+#ifndef BUFFER_PRINT
+#define BUFFER_PRINT REMOTEDEBUG_PRINT_BUFFER_SIZE // backwards compatibility
+#endif
 
 // Should the help text be displayed on connection.
 // Enabled by default, comment to disable
-#define SHOW_HELP true
+#ifndef REMOTEDEBUG_SHOW_HELP
+#define REMOTEDEBUG_SHOW_HELP true
+#endif
+#ifndef SHOW_HELP
+#define SHOW_HELP REMOTEDEBUG_SHOW_HELP // backwards compatibility
+#endif
 
 // Buffering (sends in interval of time to avoid ESP misterious delays)
 // Uncomment this to disable it
-#define CLIENT_BUFFERING true
+#ifndef REMOTEDEBUG_CLIENT_BUFFERING
+#define REMOTEDEBUG_CLIENT_BUFFERING true
+#endif
+#if REMOTEDEBUG_CLIENT_BUFFERING
+#define CLIENT_BUFFERING true // backwards compatibility
+#endif
 #ifdef CLIENT_BUFFERING
 #define DELAY_TO_SEND 10 // Time to send buffer
 #define MAX_SIZE_SEND 1460 // Maximum size of packet (limit of TCP/IP)

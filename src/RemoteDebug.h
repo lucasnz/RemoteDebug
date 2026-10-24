@@ -77,56 +77,36 @@
 #endif
 #include <WiFi.h>
 
-////// Shortcuts macros
-
-// Auto function for debug macros?
-
-#ifndef DEBUG_DISABLE_AUTO_FUNC // With auto func
-
-	#ifdef ESP32
-
-		// ESP32 -> Multicore  - show core id ?
-
-		#define DEBUG_AUTO_CORE true   // debug show core id ? (comment to disable it)
-
-		#ifdef DEBUG_AUTO_CORE
-
-			#define rdebugA(fmt, ...) if (Debug.isActive(Debug.ANY)) 		Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugP(fmt, ...) if (Debug.isActive(Debug.PROFILER))	Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugV(fmt, ...) if (Debug.isActive(Debug.VERBOSE)) 	Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugD(fmt, ...) if (Debug.isActive(Debug.DEBUG)) 		Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugI(fmt, ...) if (Debug.isActive(Debug.INFO)) 		Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugW(fmt, ...) if (Debug.isActive(Debug.WARNING)) 	Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-			#define rdebugE(fmt, ...) if (Debug.isActive(Debug.ERROR)) 		Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
-
-		#endif
-
-	#endif
-
-	#ifndef DEBUG_AUTO_CORE // Core ID prefix disabled
-
-		#define rdebugA(fmt, ...) if (Debug.isActive(Debug.ANY)) 		Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugP(fmt, ...) if (Debug.isActive(Debug.PROFILER)) 	Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugV(fmt, ...) if (Debug.isActive(Debug.VERBOSE)) 	Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugD(fmt, ...) if (Debug.isActive(Debug.DEBUG)) 		Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugI(fmt, ...) if (Debug.isActive(Debug.INFO)) 		Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugW(fmt, ...) if (Debug.isActive(Debug.WARNING)) 	Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-		#define rdebugE(fmt, ...) if (Debug.isActive(Debug.ERROR)) 		Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
-
-	#endif
-
-#else // Without auto func
-
-	#define rdebugA(fmt, ...) if (Debug.isActive(Debug.ANY)) 		Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugP(fmt, ...) if (Debug.isActive(Debug.PROFILER)) 	Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugV(fmt, ...) if (Debug.isActive(Debug.VERBOSE)) 	Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugD(fmt, ...) if (Debug.isActive(Debug.DEBUG)) 		Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugI(fmt, ...) if (Debug.isActive(Debug.INFO)) 		Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugW(fmt, ...) if (Debug.isActive(Debug.WARNING)) 	Debug.printf(fmt, ##__VA_ARGS__)
-	#define rdebugE(fmt, ...) if (Debug.isActive(Debug.ERROR)) 		Debug.printf(fmt, ##__VA_ARGS__)
-
+////// Shortcut macros
+#if defined(ESP32) && !defined(DEBUG_DISABLE_AUTO_FUNC)
+#define DEBUG_AUTO_CORE true
+#endif
+// Statement-safe wrappers avoid dangling-else bugs. beginMessage() captures the
+// level and transport routing for the immediately following Print call.
+#ifdef DEBUG_AUTO_CORE
+#define REMOTEDEBUG_PRINTF(fmt, ...) \
+    Debug.printf("(%s)(C%d) " fmt, __func__, xPortGetCoreID(), ##__VA_ARGS__)
+#elif !defined(DEBUG_DISABLE_AUTO_FUNC)
+#define REMOTEDEBUG_PRINTF(fmt, ...) \
+    Debug.printf("(%s) " fmt, __func__, ##__VA_ARGS__)
+#else
+#define REMOTEDEBUG_PRINTF(fmt, ...) Debug.printf(fmt, ##__VA_ARGS__)
 #endif
 
+#define REMOTEDEBUG_LOG(level, fmt, ...)            \
+    do {                                            \
+        if (Debug.beginMessage(level)) {             \
+            REMOTEDEBUG_PRINTF(fmt, ##__VA_ARGS__);  \
+        }                                           \
+    } while (0)
+
+#define rdebugA(fmt, ...) REMOTEDEBUG_LOG(Debug.ANY, fmt, ##__VA_ARGS__)
+#define rdebugP(fmt, ...) REMOTEDEBUG_LOG(Debug.PROFILER, fmt, ##__VA_ARGS__)
+#define rdebugV(fmt, ...) REMOTEDEBUG_LOG(Debug.VERBOSE, fmt, ##__VA_ARGS__)
+#define rdebugD(fmt, ...) REMOTEDEBUG_LOG(Debug.DEBUG, fmt, ##__VA_ARGS__)
+#define rdebugI(fmt, ...) REMOTEDEBUG_LOG(Debug.INFO, fmt, ##__VA_ARGS__)
+#define rdebugW(fmt, ...) REMOTEDEBUG_LOG(Debug.WARNING, fmt, ##__VA_ARGS__)
+#define rdebugE(fmt, ...) REMOTEDEBUG_LOG(Debug.ERROR, fmt, ##__VA_ARGS__)
 // With newline
 
 #define rdebugAln(fmt, ...) rdebugA(fmt "\n", ##__VA_ARGS__)
@@ -169,20 +149,20 @@
 // due the converter cannot
 // convert severals Serial.print in one debug* macro.
 
-#define rprintV(x, ...)		if (Debug.isActive(Debug.VERBOSE)) 	Debug.print(x, ##__VA_ARGS__)
-#define rprintD(x, ...)		if (Debug.isActive(Debug.DEBUG))	Debug.print(x, ##__VA_ARGS__)
-#define rprintI(x, ...)		if (Debug.isActive(Debug.INFO)) 	Debug.print(x, ##__VA_ARGS__)
-#define rprintW(x, ...)		if (Debug.isActive(Debug.WARNING)) 	Debug.print(x, ##__VA_ARGS__)
-#define rprintE(x, ...)		if (Debug.isActive(Debug.ERROR)) 	Debug.print(x, ##__VA_ARGS__)
-#define rprintA(x, ...)		if (Debug.isActive(Debug.ANY)) 		Debug.print(x, ##__VA_ARGS__)
+#define rprintV(x, ...) do { if (Debug.beginMessage(Debug.VERBOSE)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define rprintD(x, ...) do { if (Debug.beginMessage(Debug.DEBUG)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define rprintI(x, ...) do { if (Debug.beginMessage(Debug.INFO)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define rprintW(x, ...) do { if (Debug.beginMessage(Debug.WARNING)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define rprintE(x, ...) do { if (Debug.beginMessage(Debug.ERROR)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define rprintA(x, ...) do { if (Debug.beginMessage(Debug.ANY)) Debug.print(x, ##__VA_ARGS__); } while (0)
 
 
-#define rprintVln(x, ...)	if (Debug.isActive(Debug.VERBOSE)) 	Debug.println(x,  ##__VA_ARGS__)
-#define rprintDln(x, ...)	if (Debug.isActive(Debug.DEBUG))	Debug.println(x, ##__VA_ARGS__)
-#define rprintIln(x, ...)	if (Debug.isActive(Debug.INFO)) 	Debug.println(x, ##__VA_ARGS__)
-#define rprintWln(x, ...)	if (Debug.isActive(Debug.WARNING)) 	Debug.println(x, ##__VA_ARGS__)
-#define rprintEln(x, ...)	if (Debug.isActive(Debug.ERROR)) 	Debug.println(x, ##__VA_ARGS__)
-#define rprintAln(x, ...)	if (Debug.isActive(Debug.ANY)) 		Debug.println(x, ##__VA_ARGS__)
+#define rprintVln(x, ...) do { if (Debug.beginMessage(Debug.VERBOSE)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintDln(x, ...) do { if (Debug.beginMessage(Debug.DEBUG)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintIln(x, ...) do { if (Debug.beginMessage(Debug.INFO)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintWln(x, ...) do { if (Debug.beginMessage(Debug.WARNING)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintEln(x, ...) do { if (Debug.beginMessage(Debug.ERROR)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintAln(x, ...) do { if (Debug.beginMessage(Debug.ANY)) Debug.println(x, ##__VA_ARGS__); } while (0)
 
 ///// Class
 
@@ -196,10 +176,10 @@ class RemoteDebug: public Print
 
 	// Methods
 
-	bool begin(String hostName, uint16_t port, uint8_t startingDebugLevel = DEBUG);
-	bool begin(String hostName, uint8_t startingDebugLevel = DEBUG);
+	bool begin(const String& hostName, uint16_t port, uint8_t startingDebugLevel = DEBUG);
+	bool begin(const String& hostName, uint8_t startingDebugLevel = DEBUG);
 
-	void setPassword(String password);
+	void setPassword(const String& password);
 
 	void stop();
 
@@ -211,7 +191,7 @@ class RemoteDebug: public Print
 
 	void setResetCmdEnabled(boolean enable);
 
-	void setHelpProjectsCmds(String help);
+	void setHelpProjectsCmds(const String& help);
 	void setCallBackProjectCmds(void (*callback)());
 	String getLastCommand();
 	void clearLastCommand();
@@ -226,10 +206,12 @@ class RemoteDebug: public Print
 	void setCallBackNewClient(void (*callback)());
 
 
-	void setFilter(String filter);
+	void setFilter(const String& filter);
 	void setNoFilter();
 
-	boolean isActive(uint8_t debugLevel = DEBUG);
+	boolean isActive(uint8_t debugLevel = DEBUG) const;
+	// Captures routing state for one immediately following Print operation.
+	boolean beginMessage(uint8_t debugLevel = DEBUG);
 
 #ifdef REMOTEDEBUG_ENABLE_WEBSOCKET
     // Optional AsyncWebServer transport. The application owns the socket.
@@ -319,11 +301,13 @@ class RemoteDebug: public Print
 
 	// Expand characters as CR/LF to \\r, \\n
 
-	String expand(String string);
+	String expand(const String& string);
 
 	// Destructor
 
 	~RemoteDebug();
+	RemoteDebug(const RemoteDebug&) = delete;
+	RemoteDebug& operator=(const RemoteDebug&) = delete;
 
 private:
 
@@ -346,7 +330,6 @@ private:
 	uint32_t _lastTimePrint = millis(); // Last time print a line
 
 	uint8_t _levelBeforeProfiler=DEBUG;	// Last Level before Profiler level
-	uint32_t _levelProfilerDisable = 0;	// time in millis to disable the profiler level
 
 	boolean _showTime = false;			// Show time in millis
 
@@ -404,15 +387,23 @@ private:
     String makeWebPrefix(uint8_t level);
 #endif
 
+	WiFiServer* _telnetServer = nullptr;
+	WiFiClient _telnetClient;
+	bool (*_clientAuthorizer)(const IPAddress&) = nullptr;
+	uint32_t _nextConnectionAllowed = 0;
+	uint8_t _consecutiveAuthFailures = 0;
+
 	String _bufferPrint = "";			// Buffer of print write to WiFi
 
 #ifdef CLIENT_BUFFERING
 	String _bufferSend = "";			// Buffer to send data to web app or telnet client
-	uint16_t _sizeBufferSend = 0;		// Size of it
+	size_t _sizeBufferSend = 0;		// Size of it
 	uint32_t _lastTimeSend = 0;			// Last time command send data
 #endif
 
 #ifdef DEBUGGER_ENABLED
+	uint32_t _debuggerNextHandle = 0;
+	boolean _debuggerLastConnected = false;
 //	// For Simple software debugger - based on SerialDebug Library
 	boolean (*_callbackDbgEnabled)() = NULL;// Callable for debugger enabled
 	void (*_callbackDbgHandle)(const boolean) = NULL;	// Callable for handle of debugger
