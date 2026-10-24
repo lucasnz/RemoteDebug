@@ -350,6 +350,7 @@ private:
 
 	String _command = "";				// Command received
 	bool _commandOverflow = false;		// Overlong command was discarded
+	uint8_t _telnetNegotiationBytesRemaining = 0;
 	String _lastCommand = "";			// Last Command received
 	uint32_t _lastTimeCommand = millis();// Last time command received
 	String _helpProjectCmds = "";		// Help of comands setted by project (sketch)
@@ -415,6 +416,8 @@ private:
 
 	void showHelp();
 	void processCommand();
+	void sendTelnetCommand(uint8_t command, uint8_t option);
+	void setTelnetPasswordEcho(bool passwordEntry);
 	String formatNumber(uint32_t value, uint8_t size, char insert='0');
 	boolean isCRLF(char character);
 	uint32_t getFreeMemory();

@@ -56,6 +56,12 @@
 #define REMOTEDEBUG_AUTH_BACKOFF_MS 1000UL
 #endif
 
+// Ask Telnet clients to disable local echo while a password is entered.
+// This hides the password on screen but does not encrypt the connection.
+#ifndef REMOTEDEBUG_HIDE_PASSWORD
+#define REMOTEDEBUG_HIDE_PASSWORD 1
+#endif
+
 // Maximum time for inactivity (em milliseconds)
 // Default: 10 minutes
 // Comment it if you not want this

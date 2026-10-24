@@ -45,6 +45,14 @@ static const char VERSION[] = "4.0.0";
 			_telnetClient.print(str); \
 	}
 
+namespace
+{
+    constexpr uint8_t TELNET_IAC = 255;
+    constexpr uint8_t TELNET_WILL = 251;
+    constexpr uint8_t TELNET_WONT = 252;
+    constexpr uint8_t TELNET_ECHO = 1;
+}
+
 // Internal debug macro - recommended stay disable
 
 #define D(fmt, ...) // Without this
@@ -127,6 +135,31 @@ void RemoteDebug::setPassword(const String& password)
 {
 
 	_password = password;
+}
+
+void RemoteDebug::sendTelnetCommand(uint8_t command, uint8_t option)
+{
+#if REMOTEDEBUG_HIDE_PASSWORD
+	if (!_telnetClient || !_telnetClient.connected()) return;
+
+	const uint8_t negotiation[] = { TELNET_IAC, command, option };
+	_telnetClient.write(negotiation, sizeof(negotiation));
+#else
+	(void)command;
+	(void)option;
+#endif
+}
+
+void RemoteDebug::setTelnetPasswordEcho(bool passwordEntry)
+{
+#if REMOTEDEBUG_HIDE_PASSWORD
+	// WILL ECHO tells a compliant client that the server owns echoing, which
+	// disables the client's local echo. This library deliberately echoes no
+	// password characters. WONT ECHO restores normal client-side echo.
+	sendTelnetCommand(passwordEntry ? TELNET_WILL : TELNET_WONT, TELNET_ECHO);
+#else
+	(void)passwordEntry;
+#endif
 }
 
 // Destructor
@@ -282,7 +315,21 @@ void RemoteDebug::handle()
 
 			// Get character
 
-			char character = _telnetClient.read();
+			const uint8_t input = static_cast<uint8_t>(_telnetClient.read());
+
+			// Ignore the command and option bytes in Telnet negotiation replies.
+			if (_telnetNegotiationBytesRemaining > 0)
+			{
+				--_telnetNegotiationBytesRemaining;
+				continue;
+			}
+			if (input == TELNET_IAC)
+			{
+				_telnetNegotiationBytesRemaining = 2;
+				continue;
+			}
+
+			const char character = static_cast<char>(input);
 
 			// Newline (CR or LF) - once one time if (\r\n) - 26/07/17
 
@@ -423,6 +470,8 @@ void RemoteDebug::disconnect(boolean only_telnetClient)
 {
 
 	// Disconnect
+
+	if (_connected) setTelnetPasswordEcho(false);
 
 	if (only_telnetClient)
 	{
@@ -1145,6 +1194,7 @@ void RemoteDebug::showHelp()
 	if (_password != "" && !_passwordOk)
 	{
 
+		setTelnetPasswordEcho(true);
 		help.concat("\r\n");
 		help.concat("* Please enter with a password to access");
 #ifdef REMOTEDEBUG_PWD_ATTEMPTS
@@ -1266,7 +1316,8 @@ void RemoteDebug::processCommand()
 		if (_command == _password)
 		{
 
-			debugPrintln("* Password ok, allowing access now...");
+			setTelnetPasswordEcho(false);
+			debugPrintln("\r\n* Password ok, allowing access now...");
 
 			_passwordOk = true;
 			_consecutiveAuthFailures = 0;
@@ -1277,7 +1328,7 @@ void RemoteDebug::processCommand()
 		else
 		{
 
-			debugPrintln("* Wrong password!");
+			debugPrintln("\r\n* Wrong password!");
 			++_consecutiveAuthFailures;
 			const uint8_t shift = (_consecutiveAuthFailures > 5) ? 5 : _consecutiveAuthFailures;
 			_nextConnectionAllowed = millis() + (REMOTEDEBUG_AUTH_BACKOFF_MS << shift);
@@ -1289,7 +1340,7 @@ void RemoteDebug::processCommand()
 			if (_passwordAttempt > REMOTEDEBUG_PWD_ATTEMPTS)
 			{
 
-				debugPrintln("* Many attempts. Closing session now.");
+				debugPrintln("\r\n* Many attempts. Closing session now.");
 
 				// Disconnect
 
