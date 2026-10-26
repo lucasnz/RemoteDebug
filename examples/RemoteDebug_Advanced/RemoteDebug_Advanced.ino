@@ -38,6 +38,8 @@ void setup() {
   Debug.setHelpProjectsCmds(
       "bench1 - Benchmark formatted debug output\n"
       "bench2 - Benchmark print/println output\n"
+      "filter-on - Show only output containing 'example'\n"
+      "filter-off - Clear the output filter\n"
       "status - Show Wi-Fi and uptime status");
   Debug.setCallBackProjectCmds(processProjectCommand);
 
@@ -61,7 +63,7 @@ void loop() {
       debugW("WARNING level example");
       debugE("ERROR level example");
 
-      // Only perform the extra work if the current client level requests it.
+      // Only perform the extra work if at least one active transport requests DEBUG output.
       if (Debug.isActive(RemoteDebug::DEBUG)) {
         Debug.println("Debug level is active; calling benchmark helper.");
         debugD("This line includes the helper's function name.");
@@ -99,6 +101,12 @@ static void processProjectCommand() {
     runPrintBenchmark();
   } else if (command == "bench2") {
     runPrintlnBenchmark();
+  } else if (command == "filter-on") {
+    Debug.setFilter("example");
+    debugA("Filter enabled; only output containing 'example' will be shown");
+  } else if (command == "filter-off") {
+    Debug.setNoFilter();
+    debugA("Filter disabled");
   } else if (command == "status") {
     debugA("Wi-Fi: %s; IP: %s; uptime: %lu seconds",
            WiFi.isConnected() ? "connected" : "disconnected",

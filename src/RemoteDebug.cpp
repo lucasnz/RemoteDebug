@@ -108,7 +108,7 @@ bool RemoteDebug::begin(const String& hostName, uint16_t port, uint8_t startingD
 	return true;
 }
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 // Simple software debugger - based on SerialDebug Library
 void RemoteDebug::initDebugger(boolean (*callbackEnabled)(), void (*callbackHandle)(const boolean), String (*callbackGetHelp)(), void (*callbackProcessCmd)())
 {
@@ -220,7 +220,7 @@ void RemoteDebug::handle()
 #endif
 
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 	if (_debuggerNextHandle == 0) _debuggerNextHandle = millis();
 #endif
 
@@ -425,7 +425,7 @@ void RemoteDebug::handle()
 #endif
 	}
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 
 	// For Simple software debugger - based on SerialDebug Library
 
@@ -745,7 +745,7 @@ size_t RemoteDebug::write(uint8_t character)
 	if (_newLine)
 	{
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 
 		// For Simple software debugger - based on SerialDebug Library
 
@@ -1288,7 +1288,7 @@ void RemoteDebug::showHelp()
 		help.concat(show);
 	}
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 	// Get help for the debugger
 
 	if (_callbackDbgHelp)
@@ -1407,7 +1407,7 @@ void RemoteDebug::processCommand()
 
 	// Process the command
 
-	if (_command == "h" || _command == "?")
+	if (_command == "h" || _command == "?" || _command == "help")
 	{
 
 		// Show help
@@ -1552,7 +1552,7 @@ void RemoteDebug::processCommand()
 
 		ESP.restart();
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 	}
 	else if (!_callbackDbgProcessCmd && _command.startsWith("dbg"))
 	{
@@ -1570,7 +1570,7 @@ void RemoteDebug::processCommand()
 
 		// Callbacks
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 		// Process commands for the debugger
 
 		if (_callbackDbgProcessCmd)
@@ -1728,7 +1728,7 @@ button{cursor:pointer}button:hover{background:#374151}input{flex:1;min-width:12r
 #log{height:68vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#030712;border:1px solid #374151;border-radius:.4rem;padding:.8rem;margin:0;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
 .small{color:#9ca3af;font-size:.85rem}</style></head><body>
 <h1>ESP32 RemoteDebug</h1><div class="controls"><span id="state" class="offline">Disconnected</span>
-<label>Level <select id="level"><option>verbose</option><option selected>debug</option><option>info</option><option>warning</option><option>error</option><option>any</option></select></label>
+<label>Level <select id="level"><option>verbose</option><option selected>debug</option><option>info</option><option>warning</option><option>error</option></select></label>
 <button id="silence" type="button">Silence</button><button id="pause" type="button">Pause display</button><button id="clear" type="button">Clear</button></div>
 <div class="controls"><input id="command" aria-label="Command" placeholder="help or status"><button id="send" type="button">Send</button></div>
 <p class="small">The page reconnects automatically and retains the newest 2,000 lines.</p><pre id="log" role="log" aria-live="polite"></pre>

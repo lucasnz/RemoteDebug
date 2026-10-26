@@ -1,5 +1,5 @@
 /*
- * RemoteDebug using AsyncWebSocket.
+ * RemoteDebug using AsyncWebSocket only (no Telnet transport).
  * Install ESPAsyncWebServer for ESP32.
  * REMOTEDEBUG_ENABLE_WEBSOCKET must be enabled in RemoteDebugCfg.h or set in platformio.ini build flags.
  * build flags:
@@ -39,9 +39,6 @@ void setup() {
     Serial.begin(115200);
     connectWiFi();
 
-    if (!Debug.begin(HOST_NAME, 23, RemoteDebug::DEBUG)) {
-        Serial.println("RemoteDebug failed to start");
-    }
 
     Debug.setWebDebugLevel(RemoteDebug::DEBUG);
     Debug.showWebDebugLevel(true);

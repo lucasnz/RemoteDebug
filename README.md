@@ -391,6 +391,7 @@ Settings can be supplied as build flags or changed in `RemoteDebugCfg.h`. Prefer
 ```ini
 build_flags =
     -D REMOTEDEBUG_ENABLE_WEBSOCKET=1
+    -D REMOTEDEBUG_ENABLE_DEBUGGER=0
     -D REMOTEDEBUG_WEB_MAX_LINE_LENGTH=512
     -D REMOTEDEBUG_WEB_MAX_BATCH_LENGTH=16384
     -D REMOTEDEBUG_MAX_COMMAND_LENGTH=256
@@ -427,7 +428,7 @@ build_flags =
 | `CLIENT_BUFFERING` | Derived alias | Defined for compatibility when client buffering is enabled. |
 | `DELAY_TO_SEND` | `10` | Telnet buffered-send interval in milliseconds. |
 | `MAX_SIZE_SEND` | `1460` | Maximum buffered Telnet send size. |
-| `DEBUGGER_ENABLED` | `true` | Enables callback-based debugger integration. |
+| `REMOTEDEBUG_ENABLE_DEBUGGER` | `1` | Enables callback-based debugger integration. Set to `0` to compile it out. |
 | `DEBUGGER_HANDLE_TIME` | `850` | Minimum interval between scheduled debugger callback handling. |
 | `DEBUGGER_SEND_INFO` | Undefined | Reserved optional debugger-information support. |
 
@@ -468,15 +469,11 @@ Monitor `droppedWebLines()` and `droppedWebBytes()` when diagnosing missing WebS
 
 ## Examples
 
-Examples may vary between revisions. Check the source under `examples/` and compare it with the installed `RemoteDebug.h`.
-
-Common example names include:
-
-- `RemoteDebug_Basic`: basic setup and logging
-- `RemoteDebug_Advanced`: commands, filters, display options, and profiler behaviour
-- `RemoteDebug_Debugger`: debugger callback integration
-- `DualTransport`: Telnet and WebSocket integration
-- `WebSocketDebug`: WebSocket integration
+- [`RemoteDebug_Basic`](examples/RemoteDebug_Basic/RemoteDebug_Basic.ino): Telnet-only setup, mDNS registration, log levels, colours, and reset-command enablement.
+- [`RemoteDebug_Advanced`](examples/RemoteDebug_Advanced/RemoteDebug_Advanced.ino): project commands, callbacks, explicit level checks, runtime filtering, display options, and output benchmarks.
+- [`RemoteDebug_Debugger`](examples/RemoteDebug_Debugger/RemoteDebug_Debugger.ino): interactive diagnostics implemented with project commands and callbacks.
+- [`WebSocketDebug`](examples/WebSocketDebug/WebSocketDebug.ino): WebSocket-only browser console using the library-owned `/debug/ws` endpoint and built-in `/debug` page.
+- [`DualTransport`](examples/DualTransport/DualTransport.ino): simultaneous Telnet and WebSocket operation with independent transport settings.
 
 ## Contributing and issues
 

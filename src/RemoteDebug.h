@@ -278,7 +278,7 @@ class RemoteDebug: public Print
 
 	boolean isConnected();
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 	// For Simple software debugger - based on SerialDebug Library
 	void initDebugger(boolean (*callbackEnabled)(), void (*callbackHandle)(const boolean), String (*callbackGetHelp)(), void (*callbackProcessCmd)());
 	WiFiClient* getTelnetClient();
@@ -413,7 +413,7 @@ private:
 	uint32_t _lastTimeSend = 0;			// Last time command send data
 #endif
 
-#ifdef DEBUGGER_ENABLED
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 	uint32_t _debuggerNextHandle = 0;
 	boolean _debuggerLastConnected = false;
 //	// For Simple software debugger - based on SerialDebug Library

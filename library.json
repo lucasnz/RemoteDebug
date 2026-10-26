@@ -24,10 +24,5 @@
   ],
   "headers": [
     "RemoteDebug.h"
-  ],
-  "dependencies": [
-    {
-      "ESPAsyncWebServer": "*"
-    }
   ]
 }

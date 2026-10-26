@@ -45,14 +45,13 @@
 // Disable auto function for debug macros? (uncomment this if not want this)
 //#define DEBUG_DISABLE_AUTO_FUNC true
 
-// Simple password request - left commented if not need this - 18/07/18
-// Notes:
-// It is very simple feature, only text, no cryptography,
-// and the password is echoed in screen (I not discovery yet how disable it)
-// telnet use advanced authentication (kerberos, etc.)
-// Such now as RemoteDebug now is not for production releases,
-// this kind of authentication will not be done now.
-// Can be by project, just call setPassword method
+// Optional Telnet password prompt.
+//
+// When REMOTEDEBUG_HIDE_PASSWORD is enabled, the library requests that
+// compatible Telnet clients disable local echo while the password is entered.
+// This hides the password on screen but does not encrypt the connection.
+//
+// Configure the password at runtime with setPassword().
 #ifndef REMOTEDEBUG_PWD_ATTEMPTS
 #define REMOTEDEBUG_PWD_ATTEMPTS 3
 #endif
@@ -108,10 +107,12 @@
 #define MAX_SIZE_SEND 1460 // Maximum size of packet (limit of TCP/IP)
 #endif
 
-// Debugger support enabled ?
-// Comment this to disable it
-#define DEBUGGER_ENABLED true
-#ifdef DEBUGGER_ENABLED
+// Optional callback-based debugger integration.
+// Override with -D REMOTEDEBUG_ENABLE_DEBUGGER=0 to compile it out.
+#ifndef REMOTEDEBUG_ENABLE_DEBUGGER
+#define REMOTEDEBUG_ENABLE_DEBUGGER 1
+#endif
+#if REMOTEDEBUG_ENABLE_DEBUGGER
 #define DEBUGGER_HANDLE_TIME 850 // Interval to call handle of debugger - equal to implemented in debugger
 // App have debugger elements on screen ?
 // Note: app not have it yet
