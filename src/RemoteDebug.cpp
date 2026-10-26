@@ -637,8 +637,8 @@ boolean RemoteDebug::isActive(uint8_t debugLevel) const
     const bool telnetActive = (debugLevel >= _clientDebugLevel && !_silence &&
                                (_connected || _serialEnabled));
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
-    const bool webActive = (_webSocket && hasWebClients() && 
-                            !_webSilenced && !_silence && debugLevel >= _webLevel);
+    const bool webActive = (_webSocket && hasWebClients() &&
+                            !_webSilenced && debugLevel >= _webLevel);
     return telnetActive || webActive;
 #else
     return telnetActive;
@@ -651,13 +651,26 @@ boolean RemoteDebug::beginMessage(uint8_t debugLevel)
     if (telnetActive) _lastDebugLevel = debugLevel;
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
     _webRouteLevel = debugLevel;
-    _webRouteActive = (_webSocket && hasWebClients() && !_webSilenced && !_silence && debugLevel >= _webLevel);
+    _webRouteActive = (_webSocket && hasWebClients() && !_webSilenced && debugLevel >= _webLevel);
     _webRoutePending = telnetActive || _webRouteActive;
-    return _webRoutePending;
+    _telnetRoutePending = _webRoutePending;
 #else
-    return telnetActive;
+    _telnetRoutePending = telnetActive;
+#endif
+    _telnetRouteActive = telnetActive;
+    return _telnetRoutePending;
+}
+void RemoteDebug::endMessage()
+{
+    _telnetRoutePending = false;
+    _telnetRouteActive = false;
+#if REMOTEDEBUG_ENABLE_WEBSOCKET
+    _webRoutePending = false;
+    _webRouteActive = false;
+    _webRouteLevel = ANY;
 #endif
 }
+
 // Set help for commands over telnet set by sketch
 
 void RemoteDebug::setHelpProjectsCmds(const String& help)
@@ -710,6 +723,12 @@ size_t RemoteDebug::write(uint8_t character)
 	// Connected ?
 
 	boolean connected = _connected;
+	boolean serialEnabled = _serialEnabled;
+	if (_telnetRoutePending)
+	{
+		connected = connected && _telnetRouteActive;
+		serialEnabled = serialEnabled && _telnetRouteActive;
+	}
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
     writeWebCharacter(character);
 #endif
@@ -1020,7 +1039,7 @@ size_t RemoteDebug::write(uint8_t character)
 
 			// Write to telnet buffered
 
-			if (connected || _serialEnabled)
+			if (connected || serialEnabled)
 			{ // send data to Client
 				_bufferPrint = show;
 			}
@@ -1131,7 +1150,7 @@ size_t RemoteDebug::write(uint8_t character)
 			}
 
 			// Echo to serial (not buffering it)
-			if (_serialEnabled)
+			if (serialEnabled)
 			{
 				// remove color codes before printing to serial
 				const char *color_codes[] = {
@@ -1618,10 +1637,6 @@ void RemoteDebug::silence(boolean activate, boolean showMessage)
 	// Set it
 
 	_silence = activate;
-#if REMOTEDEBUG_ENABLE_WEBSOCKET
-    _webSilenced = activate;
-    if (activate) clearWebBuffers();
-#endif
 }
 
 boolean RemoteDebug::isSilence()
@@ -1871,20 +1886,14 @@ void RemoteDebug::writeWebCharacter(uint8_t character)
         active = _webRouteActive;
         level = _webRouteLevel;
     } else {
-        active = (_webSocket && hasWebClients() && !_webSilenced && !_silence);
+        active = (_webSocket && hasWebClients() && !_webSilenced);
         level = ANY;
     }
-    if (!active) {
-        if (character == '\n') { _webRoutePending = false; _webRouteActive = false; }
-        return;
-    }
+    if (!active) return;
     if (character == '\r') return;
     if (!_webLineHasLevel) { _webLineLevel = level; _webLineHasLevel = true; }
     if (character == '\n') {
         flushWebSocketLine();
-        _webRoutePending = false;
-        _webRouteActive = false;
-        _webRouteLevel = ANY;
         return;
     }
     if (_webLine.length() >= WEB_MAX_LINE_LENGTH) flushWebSocketLine();
@@ -1918,7 +1927,7 @@ void RemoteDebug::flushWebSocketLine()
 
 void RemoteDebug::sendWebBatch(bool force)
 {
-    if (!_webSocket || !hasWebClients() || _webSilenced || _silence) {
+    if (!_webSocket || !hasWebClients() || _webSilenced) {
         clearWebBuffers();
         return;
     }

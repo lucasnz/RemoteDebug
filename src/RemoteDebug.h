@@ -93,11 +93,12 @@
 #define REMOTEDEBUG_PRINTF(fmt, ...) Debug.printf(fmt, ##__VA_ARGS__)
 #endif
 
-#define REMOTEDEBUG_LOG(level, fmt, ...)            \
-    do {                                            \
+#define REMOTEDEBUG_LOG(level, fmt, ...)             \
+    do {                                             \
         if (Debug.beginMessage(level)) {             \
             REMOTEDEBUG_PRINTF(fmt, ##__VA_ARGS__);  \
-        }                                           \
+            Debug.endMessage();                      \
+        }                                            \
     } while (0)
 
 #define rdebugA(fmt, ...) REMOTEDEBUG_LOG(Debug.ANY, fmt, ##__VA_ARGS__)
@@ -149,20 +150,27 @@
 // due the converter cannot
 // convert severals Serial.print in one debug* macro.
 
-#define rprintV(x, ...) do { if (Debug.beginMessage(Debug.VERBOSE)) Debug.print(x, ##__VA_ARGS__); } while (0)
-#define rprintD(x, ...) do { if (Debug.beginMessage(Debug.DEBUG)) Debug.print(x, ##__VA_ARGS__); } while (0)
-#define rprintI(x, ...) do { if (Debug.beginMessage(Debug.INFO)) Debug.print(x, ##__VA_ARGS__); } while (0)
-#define rprintW(x, ...) do { if (Debug.beginMessage(Debug.WARNING)) Debug.print(x, ##__VA_ARGS__); } while (0)
-#define rprintE(x, ...) do { if (Debug.beginMessage(Debug.ERROR)) Debug.print(x, ##__VA_ARGS__); } while (0)
-#define rprintA(x, ...) do { if (Debug.beginMessage(Debug.ANY)) Debug.print(x, ##__VA_ARGS__); } while (0)
+#define REMOTEDEBUG_PRINT(level, method, x, ...)       \
+    do {                                               \
+        if (Debug.beginMessage(level)) {               \
+            Debug.method(x, ##__VA_ARGS__);            \
+            Debug.endMessage();                        \
+        }                                              \
+    } while (0)
 
+#define rprintV(x, ...) REMOTEDEBUG_PRINT(Debug.VERBOSE, print, x, ##__VA_ARGS__)
+#define rprintD(x, ...) REMOTEDEBUG_PRINT(Debug.DEBUG, print, x, ##__VA_ARGS__)
+#define rprintI(x, ...) REMOTEDEBUG_PRINT(Debug.INFO, print, x, ##__VA_ARGS__)
+#define rprintW(x, ...) REMOTEDEBUG_PRINT(Debug.WARNING, print, x, ##__VA_ARGS__)
+#define rprintE(x, ...) REMOTEDEBUG_PRINT(Debug.ERROR, print, x, ##__VA_ARGS__)
+#define rprintA(x, ...) REMOTEDEBUG_PRINT(Debug.ANY, print, x, ##__VA_ARGS__)
 
-#define rprintVln(x, ...) do { if (Debug.beginMessage(Debug.VERBOSE)) Debug.println(x, ##__VA_ARGS__); } while (0)
-#define rprintDln(x, ...) do { if (Debug.beginMessage(Debug.DEBUG)) Debug.println(x, ##__VA_ARGS__); } while (0)
-#define rprintIln(x, ...) do { if (Debug.beginMessage(Debug.INFO)) Debug.println(x, ##__VA_ARGS__); } while (0)
-#define rprintWln(x, ...) do { if (Debug.beginMessage(Debug.WARNING)) Debug.println(x, ##__VA_ARGS__); } while (0)
-#define rprintEln(x, ...) do { if (Debug.beginMessage(Debug.ERROR)) Debug.println(x, ##__VA_ARGS__); } while (0)
-#define rprintAln(x, ...) do { if (Debug.beginMessage(Debug.ANY)) Debug.println(x, ##__VA_ARGS__); } while (0)
+#define rprintVln(x, ...) REMOTEDEBUG_PRINT(Debug.VERBOSE, println, x, ##__VA_ARGS__)
+#define rprintDln(x, ...) REMOTEDEBUG_PRINT(Debug.DEBUG, println, x, ##__VA_ARGS__)
+#define rprintIln(x, ...) REMOTEDEBUG_PRINT(Debug.INFO, println, x, ##__VA_ARGS__)
+#define rprintWln(x, ...) REMOTEDEBUG_PRINT(Debug.WARNING, println, x, ##__VA_ARGS__)
+#define rprintEln(x, ...) REMOTEDEBUG_PRINT(Debug.ERROR, println, x, ##__VA_ARGS__)
+#define rprintAln(x, ...) REMOTEDEBUG_PRINT(Debug.ANY, println, x, ##__VA_ARGS__)
 
 ///// Class
 
@@ -210,8 +218,9 @@ class RemoteDebug: public Print
 	void setNoFilter();
 
 	boolean isActive(uint8_t debugLevel = DEBUG) const;
-	// Captures routing state for one immediately following Print operation.
+	// Captures routing state for one logical message. endMessage() releases it.
 	boolean beginMessage(uint8_t debugLevel = DEBUG);
+	void endMessage();
 
 #if REMOTEDEBUG_ENABLE_WEBSOCKET
     // Creates the WebSocket endpoint and serves the self-contained browser console.
@@ -335,6 +344,8 @@ private:
 	boolean _showRaw = false;			// Show in raw mode ?
 
 	boolean _serialEnabled = false;		// Send to serial too (not recommended)
+	bool _telnetRoutePending = false;	// A logical message has captured Telnet/serial routing
+	bool _telnetRouteActive = false;	// Current logical message is enabled for Telnet/serial
 
 	boolean _resetCommandEnabled=false;	// Enable command to reset the board
 
